@@ -1,0 +1,26 @@
+<!--
+  ~ Copyright (c) 2018  MemVerge Inc.
+  -->
+
+<!DOCTYPE suite SYSTEM "http://testng.org/testng-1.0.dtd" >
+<suite name="integration test" verbose="1">
+  <listeners>
+    <listener class-name = "com.memverge.mvfs.LogListener" />
+  </listeners>
+
+  <test name="jmvfs integration test">
+    <groups>
+      <run>
+        <include name="IntegrationTest"/>
+      </run>
+    </groups>
+    <packages>
+      <package name="com.memverge.mvfs.*"/>
+      <package name="org.apache.spark.shuffle.memverge.*"/>
+    </packages>
+    <classes>
+      <class name="org.apache.spark.shuffle.sort.DMOUnsafeSorterTest" />
+      <class name="org.apache.spark.shuffle.sort.DMOUnsafeShuffleWriterTest" />
+    </classes>
+  </test>
+</suite>
