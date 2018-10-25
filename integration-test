@@ -1,0 +1,4 @@
+#!/usr/bin/bash
+# This script only RUNs the integration tests.
+# Make sure you compile the project before doing this.
+mvn failsafe:integration-test -DskipIT=false
