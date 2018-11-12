@@ -5,10 +5,10 @@
   xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
   <modelVersion>4.0.0</modelVersion>
 
-  <groupId>com.memverge.mvfs</groupId>
-  <artifactId>jmvfs</artifactId>
-  <version>1.1.0</version>
-  <name>jmvfs</name>
+  <groupId>com.memverge</groupId>
+  <artifactId>splash</artifactId>
+  <version>0.1.0</version>
+  <name>splash</name>
 
   <properties>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
@@ -74,16 +74,15 @@
       <version>${guava.version}</version>
     </dependency>
     <dependency>
-      <groupId>org.projectlombok</groupId>
-      <artifactId>lombok</artifactId>
-      <version>1.18.2</version>
-      <scope>provided</scope>
-    </dependency>
-    <dependency>
       <groupId>org.scala-lang</groupId>
       <artifactId>scala-library</artifactId>
       <version>${scala.version}</version>
       <scope>provided</scope>
+    </dependency>
+    <dependency>
+      <groupId>com.memverge.mvfs</groupId>
+      <artifactId>jmvfs</artifactId>
+      <version>1.2.1</version>
     </dependency>
     <!-- hdfs integration dependencies -->
     <!-- should be moved to a sub module in formal project -->

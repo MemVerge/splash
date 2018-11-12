@@ -10,7 +10,7 @@ GTAGS
 # Output Folders
 target
 test-output
-jmvfs*.log*
+splash*.log*
 
 # Output binaries
 src/main/resources/lib/

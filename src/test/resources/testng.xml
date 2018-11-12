@@ -4,23 +4,18 @@
 
 <!DOCTYPE suite SYSTEM "http://testng.org/testng-1.0.dtd" >
 <suite name="unit test" verbose="1">
-  <listeners>
-    <listener class-name = "com.memverge.mvfs.LogListener" />
-  </listeners>
-
-  <test name="jmvfs unit test">
+  <test name="Splash unit test">
     <groups>
       <run>
         <include name="UnitTest"/>
       </run>
     </groups>
     <packages>
-      <package name="com.memverge.mvfs.*"/>
-      <package name="org.apache.spark.shuffle.memverge.*"/>
+      <package name="org.apache.spark.shuffle.*"/>
     </packages>
     <classes>
-      <class name="org.apache.spark.shuffle.sort.DMOUnsafeSorterTest" />
-      <class name="org.apache.spark.shuffle.sort.DMOUnsafeShuffleWriterTest" />
+      <class name="org.apache.spark.shuffle.sort.SplashUnsafeSorterTest" />
+      <class name="org.apache.spark.shuffle.sort.SplashUnsafeShuffleWriterTest" />
     </classes>
   </test>
 </suite>

@@ -5,13 +5,13 @@
 
 <configuration>
 
-  <appender name="JMVFS_TEST_LOG"
+  <appender name="SPLASH_TEST_LOG"
     class="ch.qos.logback.core.rolling.RollingFileAppender">
-    <file>jmvfs-test.log</file>
+    <file>target/splash-test.log</file>
 
     <rollingPolicy
       class="ch.qos.logback.core.rolling.FixedWindowRollingPolicy">
-      <fileNamePattern>jmvfs-test.log.%i</fileNamePattern>
+      <fileNamePattern>target/splash-test.log.%i</fileNamePattern>
       <minIndex>1</minIndex>
       <maxIndex>19</maxIndex>
     </rollingPolicy>
@@ -28,7 +28,7 @@
 
   <appender name="STDOUT" class="ch.qos.logback.core.ConsoleAppender">
     <filter class="ch.qos.logback.classic.filter.ThresholdFilter">
-      <level>ERROR</level>
+      <level>DEBUG</level>
     </filter>
     <encoder class="ch.qos.logback.classic.encoder.PatternLayoutEncoder">
       <pattern>%d{yyyy-MM-dd HH:mm:ss.SSS} %-5level [%thread] %logger{20} : %msg%n
@@ -37,6 +37,7 @@
   </appender>
 
   <root level="DEBUG">
-    <appender-ref ref="JMVFS_TEST_LOG" />
+    <appender-ref ref="SPLASH_TEST_LOG" />
+    <appender-ref ref="STDOUT" />
   </root>
 </configuration>

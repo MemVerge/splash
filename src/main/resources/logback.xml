@@ -5,13 +5,13 @@
 
 <configuration>
 
-  <appender name="JMVFS"
+  <appender name="SPLASH"
     class="ch.qos.logback.core.rolling.RollingFileAppender">
-    <file>jmvfs.log</file>
+    <file>splash.log</file>
 
     <rollingPolicy
       class="ch.qos.logback.core.rolling.FixedWindowRollingPolicy">
-      <fileNamePattern>jmvfs.%i.log</fileNamePattern>
+      <fileNamePattern>splash.%i.log</fileNamePattern>
       <minIndex>1</minIndex>
       <maxIndex>9</maxIndex>
     </rollingPolicy>
@@ -37,7 +37,7 @@
   </appender>
 
   <root level="DEBUG">
-    <appender-ref ref="JMVFS"/>
+    <appender-ref ref="SPLASH"/>
     <appender-ref ref="STDOUT"/>
   </root>
 </configuration>
