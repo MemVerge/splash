@@ -1,37 +1,144 @@
 package com.memverge.splash.local;
 
 import com.memverge.splash.ShuffleFile;
+import com.memverge.splash.StorageFactory;
 import com.memverge.splash.TmpShuffleFile;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import java.io.File;
 import java.io.IOException;
 import java.util.UUID;
 
 public class LocalTmpShuffleFile extends LocalShuffleFile implements TmpShuffleFile {
+  private static final String TMP_FILE_PREFIX = "tmp-";
+  private static final String TMP_FOLDER = "tmp";
+  private LocalShuffleFile commitTarget = null;
 
-  @Override
-  public void swap(TmpShuffleFile other) throws IOException {
-    //TODO:
+  private UUID uuid = null;
+  private String targetId = null;
+  private static String fullPath = null;
+
+  private static final Logger log = LoggerFactory
+      .getLogger(LocalTmpShuffleFile.class);
+
+  public LocalTmpShuffleFile(String pathname)
+      throws IOException {
+    try {
+      file = File.createTempFile(pathname, ".tmp");
+      LocalStorageFactory.setTmpCount(new LocalStorageFactory().getTmpFileCount() + 1);
+    }
+    catch (IOException e) {
+      throw e;
+    }
+    if (fullPath == null) {
+      fullPath = file.getParent();
+    }
+  }
+
+  public static LocalTmpShuffleFile make() throws IOException {
+    //TODO:Done
+    UUID uuid = UUID.randomUUID();
+    String uuidStr = folderPrefix() +
+        String.format("%s%s", TMP_FILE_PREFIX, uuid.toString());
+    LocalTmpShuffleFile ret = new LocalTmpShuffleFile(uuidStr);
+    ret.uuid = uuid;
+    return ret;
+  }
+
+  public static LocalTmpShuffleFile make(ShuffleFile file) throws IOException {
+    //TODO:Done
+    if (file == null) {
+      throw new IOException("Make null File as file");
+    }
+    LocalTmpShuffleFile ret = make();
+    ret.commitTarget = (LocalShuffleFile) file;
+    ret.targetId = file.getId();
+    return ret;
   }
 
   @Override
-  public ShuffleFile getCommitTarget() {
-    //TODO:
-    return null;
+  public void swap(TmpShuffleFile other) throws IOException {
+    //TODO:Done
+    if (!other.exists()) {
+      String message = "Can only swap with a uncommitted tmp file";
+      throw new IOException(message);
+    }
+
+    LocalTmpShuffleFile localTmpShuffleFileOther = (LocalTmpShuffleFile) other;
+    if (localTmpShuffleFileOther == null) {
+      throw new IllegalArgumentException("only accept LocalTmpShuffleFile instance");
+    }
+
+    forceDelete();
+    UUID otherUuid = localTmpShuffleFileOther.uuid;
+    String otherLocalId = localTmpShuffleFileOther.localId;
+    localTmpShuffleFileOther.uuid = this.uuid;
+    localTmpShuffleFileOther.localId = this.localId;
+    this.uuid = otherUuid;
+    this.localId = otherLocalId;
+    File tmp = this.file;
+    this.file = localTmpShuffleFileOther.file;
+    localTmpShuffleFileOther.file = tmp;
+  }
+
+  @Override
+  public LocalShuffleFile getCommitTarget() {
+    //TODO:Done
+    return this.commitTarget;
   }
 
   @Override
   public ShuffleFile commit() throws IOException {
-    //TODO:
-    return null;
+    if (commitTarget == null) {
+      throw new IOException("No commit target.");
+    } else if (!exists()) {
+      throw new IOException("Tmp file already committed or recalled.");
+    }
+    if (commitTarget.exists()) {
+      log.warn("commit target already exists, remove '{}'.", commitTarget.getLocalId());
+      commitTarget.forceDelete();
+    }
+    log.debug("commit tmp file {} to target file {}.",
+        getLocalId(), getCommitTarget().getLocalId());
+
+    if(rename(this.targetId)){
+      LocalStorageFactory.setTmpCount(new LocalStorageFactory().getTmpFileCount()  - 1);
+    }
+    return commitTarget;
   }
 
   @Override
   public void recall() {
-    //TODO:
+    //TODO:Done
+    try {
+      LocalShuffleFile commitTarget = getCommitTarget();
+      if (commitTarget != null) {
+        log.info("recall tmp file {} of target file {}.",
+            getLocalId(), commitTarget.getLocalId());
+      } else {
+        log.info("recall tmp file {} without target file.", getLocalId());
+      }
+
+      delete();
+      LocalStorageFactory.setTmpCount(new LocalStorageFactory().getTmpFileCount()  - 1);
+    }catch (IOException e) {
+        log.warn("Error while deleting '{}'.  Ignore it due to force.", localId);
+    }
   }
+
 
   @Override
   public UUID uuid() {
-    //TODO:
-    return null;
+    //TODO:Done
+    return this.uuid;
+  }
+
+  public static String[] listAll() throws IOException {
+    return new LocalShuffleFile(fullPath + folderPrefix()).list();
+  }
+
+  private static String folderPrefix() {
+    return String.format("/%s/", TMP_FOLDER);
   }
 }

@@ -79,11 +79,11 @@
       <version>${scala.version}</version>
       <scope>provided</scope>
     </dependency>
-    <dependency>
+    <!--dependency>
       <groupId>com.memverge.mvfs</groupId>
       <artifactId>jmvfs</artifactId>
       <version>1.2.1</version>
-    </dependency>
+    </dependency-->
     <!-- hdfs integration dependencies -->
     <!-- should be moved to a sub module in formal project -->
     <dependency>
@@ -152,6 +152,12 @@
       <artifactId>jetty-servlet</artifactId>
       <version>9.4.11.v20180605</version>
       <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.projectlombok</groupId>
+      <artifactId>lombok</artifactId>
+      <version>1.18.2</version>
+      <scope>provided</scope>
     </dependency>
   </dependencies>
 

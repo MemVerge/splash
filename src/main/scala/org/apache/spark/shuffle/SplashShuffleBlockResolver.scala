@@ -8,7 +8,6 @@ import java.io._
 import java.security.MessageDigest
 import java.util.concurrent.ConcurrentHashMap
 
-import com.memverge.mvfs.dmo.DMOFile
 import com.memverge.splash.{ShuffleFile, StorageFactory, StorageFactoryHolder, TmpShuffleFile}
 import org.apache.commons.lang3.NotImplementedException
 import org.apache.spark.internal.Logging
@@ -238,6 +237,6 @@ private[spark] class SplashShuffleBlockResolver(
   private[spark] def shuffleFolder = storageFactory.getShuffleFolder(appId)
 
   def cleanup(): Unit = {
-    new DMOFile(shuffleFolder).forceDelete()
+    storageFactory.getDataFile(shuffleFolder).delete()
   }
 }

@@ -8,6 +8,7 @@ import java.util.Collection;
 
 public interface StorageFactory {
 
+  static int tmp_file_count = 0;
   // for TmpShuffleFile
   TmpShuffleFile makeSpillFile() throws IOException;
 
@@ -28,7 +29,7 @@ public interface StorageFactory {
 
   int getShuffleFileCount(String appId);
 
-  int getTmpFileCount();
+  int getTmpFileCount() throws IOException;
 
   // cleanup
   void reset();

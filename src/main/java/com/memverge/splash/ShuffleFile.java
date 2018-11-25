@@ -12,7 +12,7 @@ public interface ShuffleFile {
 
   long getSize();
 
-  boolean delete();
+  boolean delete() throws IOException;
 
   boolean exists() throws IOException;
 

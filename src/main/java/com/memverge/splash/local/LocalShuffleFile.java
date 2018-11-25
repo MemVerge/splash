@@ -8,15 +8,35 @@ import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.nio.file.Paths;
+import java.util.ArrayList;
+import java.util.List;
+
+import org.apache.commons.lang3.StringUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 public class LocalShuffleFile implements ShuffleFile {
 
+  String localId;
+
   private static final Logger log = LoggerFactory
       .getLogger(LocalShuffleFile.class);
 
-  private File file;
+  protected File file;
+
+  private static String fullPath = null;
+
+  public LocalShuffleFile(String pathname)
+      throws IOException {
+    file = new File(formalizeId(pathname));
+    if(fullPath == null) {
+      fullPath = file.getAbsolutePath();
+    }
+  }
+
+  public LocalShuffleFile() {
+  }
 
   @Override
   public ShuffleFile create() throws IOException {
@@ -33,8 +53,15 @@ public class LocalShuffleFile implements ShuffleFile {
     return file.length();
   }
 
+  public String getLocalId() {
+    return file.getAbsolutePath();
+  }
+
   @Override
-  public boolean delete() {
+  public boolean delete() throws IOException{
+    if(file == null) {
+     throw new IOException("file is null");
+    }
     return file.delete();
   }
 
@@ -45,7 +72,21 @@ public class LocalShuffleFile implements ShuffleFile {
 
   @Override
   public String[] list() {
-    return file.list();
+    List<String> ret = new ArrayList<>();
+    listAll(file,ret);
+    return ret.toArray(new String[0]);
+  }
+
+  public void listAll(File CurrentFile, List<String> files) {
+    File[] fList = CurrentFile.listFiles();
+    if(fList != null)
+      for (File eachFile : fList) {
+        if (eachFile.isFile()) {
+          files.add(eachFile.getAbsolutePath());
+        } else if (eachFile.isDirectory()) {
+          listAll(eachFile, files);
+        }
+      }
   }
 
   @Override
@@ -54,9 +95,15 @@ public class LocalShuffleFile implements ShuffleFile {
     return file.getAbsolutePath();
   }
 
+  //TODO:Done
   @Override
   public void reset() {
-
+    try {
+      new LocalStorageFactory().getDataFile(fullPath).delete();
+    } catch (IOException e) {
+      log.debug("files for '{}' already cleared.", file.getAbsolutePath());
+      log.warn("Reset failed.", e);
+    }
   }
 
   @Override
@@ -101,5 +148,36 @@ public class LocalShuffleFile implements ShuffleFile {
 
   private File getFile() {
     return file;
+  }
+
+  private String formalizeId(String id) throws IOException {
+    if (StringUtils.isEmpty(id)) {
+      throw new IOException("empty path id is not allowed.");
+    } else if (!id.startsWith("/")) {
+      id = "/" + id;
+    }
+    return id;
+  }
+
+  public void forceDelete() {
+    try {
+      if (exists()) {
+        delete();
+      }
+    } catch (IOException ex) {
+      log.warn("Error while deleting '{}'.  Ignore it due to force.", localId);
+    }
+  }
+  //TODO:Done -- please take notice of this, I omit some exception message
+  public boolean rename(String tgtId) throws IOException {
+    new File(new File(tgtId).getParent()).mkdirs();
+    boolean rc = file.renameTo(Paths.get(tgtId).toFile());
+    if (rc) {
+      log.debug("rename {} to {}.", localId, tgtId);
+      localId = formalizeId(tgtId);
+    } else {
+      throw new IOException("Rename File to " + tgtId + " failed.");
+    }
+    return rc;
   }
 }
