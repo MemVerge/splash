@@ -48,11 +48,11 @@ private[spark] class SplashShuffleBlockResolver(
   }
 
   private def dataFilename(shuffleId: ShuffleId, mapId: ShuffleId) = {
-    s"$shuffleFolder/shuffle_${shuffleId}_${mapId}_0.data"
+    new File(s"$shuffleFolder",s"shuffle_${shuffleId}_${mapId}_0.data").toString
   }
 
   private def indexFilename(shuffleId: ShuffleId, mapId: ShuffleId) = {
-    s"$shuffleFolder/shuffle_${shuffleId}_${mapId}_0.index"
+    new File(s"$shuffleFolder",s"shuffle_${shuffleId}_${mapId}_0.index").toString
   }
 
   def getDataFile(shuffleBlockId: ShuffleBlockId): ShuffleFile = {

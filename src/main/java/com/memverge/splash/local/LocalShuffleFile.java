@@ -12,7 +12,6 @@ import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.List;
 
-import org.apache.commons.lang3.StringUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -29,9 +28,15 @@ public class LocalShuffleFile implements ShuffleFile {
 
   public LocalShuffleFile(String pathname)
       throws IOException {
+
+    if(!new File(new File(pathname).getParent()).exists()) {
+      new File(new File(pathname).getParent()).mkdirs();
+    }
+
     file = new File(formalizeId(pathname));
+    localId = file.getAbsolutePath();
     if(fullPath == null) {
-      fullPath = file.getAbsolutePath();
+      fullPath = file.getParent().toString();
     }
   }
 
@@ -151,11 +156,6 @@ public class LocalShuffleFile implements ShuffleFile {
   }
 
   private String formalizeId(String id) throws IOException {
-    if (StringUtils.isEmpty(id)) {
-      throw new IOException("empty path id is not allowed.");
-    } else if (!id.startsWith("/")) {
-      id = "/" + id;
-    }
     return id;
   }
 
@@ -180,4 +180,22 @@ public class LocalShuffleFile implements ShuffleFile {
     }
     return rc;
   }
+
+  public static void deleteAll() {
+    deleteDir(new File(new LocalTmpFileFolder("/").getTmpPath()));
+  }
+
+  private static boolean deleteDir(File dir) {
+    if (dir.isDirectory()) {
+      String[] children = dir.list();
+      for (int i=0; i<children.length; i++) {
+        boolean success = deleteDir(new File(dir, children[i]));
+        if (!success) {
+          return false;
+        }
+      }
+    }
+    return dir.delete();
+  }
+
 }

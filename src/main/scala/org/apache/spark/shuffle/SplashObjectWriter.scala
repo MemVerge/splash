@@ -116,7 +116,7 @@ private[spark] class SplashObjectWriter(
     }
   }
 
-  def commitAndGet(): Long = {
+  def  commitAndGet(): Long = {
     flush()
     closeOs()
 

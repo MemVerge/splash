@@ -22,8 +22,6 @@ public class LocalStorageFactory implements StorageFactory {
   private static final Logger log = LoggerFactory
       .getLogger(LocalShuffleFile.class);
 
-  public static int tmp_file_count = 0;
-
   @Override
   public TmpShuffleFile makeSpillFile() throws IOException {
     //TODO:Done
@@ -76,24 +74,15 @@ public class LocalStorageFactory implements StorageFactory {
   }
 
   @Override
-  public int getTmpFileCount() throws IOException {
+  public int getTmpFileCount() throws IOException{
     //TODO:Done
-    return new LocalStorageFactory().tmp_file_count;
-  }
-
-  public static void setTmpCount(int num) {
-    tmp_file_count = num;
+    return new LocalTmpShuffleFile().getTmpFileCount();
   }
 
   @Override
   public void reset() {
     //TODO:Done
-    try {
-      new LocalShuffleFile("/").delete();
-    } catch (IOException ex) {
-      log.debug("files for '{}' already cleared.");
-    }
-    tmp_file_count = 0;
+    LocalShuffleFile.deleteAll();
   }
 
   private String getTmpPath(String folder) {
