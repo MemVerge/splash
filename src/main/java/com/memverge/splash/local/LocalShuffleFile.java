@@ -45,7 +45,6 @@ public class LocalShuffleFile implements ShuffleFile {
 
   @Override
   public ShuffleFile create() throws IOException {
-    // TODO: Update this if it doesn't suit your needs
     boolean created = getFile().createNewFile();
     if (!created) {
       log.warn("file {} already exists.", file.getAbsolutePath());
@@ -96,11 +95,9 @@ public class LocalShuffleFile implements ShuffleFile {
 
   @Override
   public String getId() {
-    // TODO: Update this if it doesn't suit your needs
     return file.getAbsolutePath();
   }
 
-  //TODO:Done
   @Override
   public void reset() {
     try {
@@ -113,7 +110,6 @@ public class LocalShuffleFile implements ShuffleFile {
 
   @Override
   public InputStream makeInputStream() {
-    // TODO: Need to test this
     InputStream ret;
     try {
       ret = new FileInputStream(file);
@@ -127,7 +123,6 @@ public class LocalShuffleFile implements ShuffleFile {
 
   @Override
   public OutputStream makeOutputStream(boolean append, boolean create) {
-    // TODO: Need to test this
     if (!exists()) {
       if (create) {
         try {
@@ -168,7 +163,6 @@ public class LocalShuffleFile implements ShuffleFile {
       log.warn("Error while deleting '{}'.  Ignore it due to force.", localId);
     }
   }
-  //TODO:Done -- please take notice of this, I omit some exception message
   public boolean rename(String tgtId) throws IOException {
     new File(new File(tgtId).getParent()).mkdirs();
     boolean rc = file.renameTo(Paths.get(tgtId).toFile());

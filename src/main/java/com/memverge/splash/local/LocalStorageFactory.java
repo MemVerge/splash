@@ -24,31 +24,26 @@ public class LocalStorageFactory implements StorageFactory {
 
   @Override
   public TmpShuffleFile makeSpillFile() throws IOException {
-    //TODO:Done
     return LocalTmpShuffleFile.make();
   }
 
   @Override
   public TmpShuffleFile makeDataFile(String path) throws IOException {
-    //TODO:Done
     return LocalTmpShuffleFile.make(getDataFile(path));
   }
 
   @Override
   public TmpShuffleFile makeIndexFile(String path) throws IOException {
-    //TODO:Done
     return LocalTmpShuffleFile.make(new LocalShuffleFile(path));
   }
 
   @Override
   public ShuffleFile getDataFile(String path) throws IOException {
-    //TODO:Done
     return new LocalShuffleFile(path);
   }
 
   @Override
   public ShuffleFile getIndexFile(String path) throws IOException {
-    //TODO:Done
     return new LocalShuffleFile(path);
   }
 
@@ -60,13 +55,11 @@ public class LocalStorageFactory implements StorageFactory {
 
   @Override
   public String getShuffleFolder(String appId) {
-    //TODO: Update this if it doesn't suit your needs
     return Paths.get(getTmpPath(appId), "shuffle").toString();
   }
 
   @Override
   public int getShuffleFileCount(String appId) {
-    //TODO:Done
     File file = Paths.get(getTmpPath(appId)).toFile();
     List<String> ret = new ArrayList<>();
     new LocalShuffleFile().listAll(file,ret);
@@ -75,25 +68,21 @@ public class LocalStorageFactory implements StorageFactory {
 
   @Override
   public int getTmpFileCount() throws IOException{
-    //TODO:Done
     return new LocalTmpShuffleFile().getTmpFileCount();
   }
 
   @Override
   public void reset() {
-    //TODO:Done
     LocalShuffleFile.deleteAll();
   }
 
   private String getTmpPath(String folder) {
-    //TODO: Update this if it doesn't suit your needs
     String tmpFolder = System.getProperty("java.io.tmpdir");
     Path path = Paths.get(tmpFolder, getUser());
     return Paths.get(path.toString(), folder).toString();
   }
 
   private String getUser() {
-    //TODO: Update this if it doesn't suit your needs
     String user = System.getProperty("user.name");
     return StringUtils.isEmpty(user) ? "unknown" : user;
   }

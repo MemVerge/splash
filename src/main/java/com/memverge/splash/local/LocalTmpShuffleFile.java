@@ -30,7 +30,6 @@ public class LocalTmpShuffleFile extends LocalShuffleFile implements TmpShuffleF
   }
 
   public static LocalTmpShuffleFile make() throws IOException {
-    //TODO:Done
     UUID uuid = UUID.randomUUID();
     String uuidStr = new File(folderPrefix(),
         String.format("%s%s", TMP_FILE_PREFIX, uuid.toString())).toString();
@@ -41,7 +40,6 @@ public class LocalTmpShuffleFile extends LocalShuffleFile implements TmpShuffleF
   }
 
   public static LocalTmpShuffleFile make(ShuffleFile file) throws IOException {
-    //TODO:Done
     if (file == null) {
       throw new IOException("Make null File as file");
     }
@@ -53,7 +51,6 @@ public class LocalTmpShuffleFile extends LocalShuffleFile implements TmpShuffleF
 
   @Override
   public void swap(TmpShuffleFile other) throws IOException {
-    //TODO:Done
     if (!other.exists()) {
       String message = "Can only swap with a uncommitted tmp file";
       throw new IOException(message);
@@ -78,7 +75,6 @@ public class LocalTmpShuffleFile extends LocalShuffleFile implements TmpShuffleF
 
   @Override
   public LocalShuffleFile getCommitTarget() {
-    //TODO:Done
     return this.commitTarget;
   }
 
@@ -102,7 +98,6 @@ public class LocalTmpShuffleFile extends LocalShuffleFile implements TmpShuffleF
 
   @Override
   public void recall() {
-    //TODO:Done
     try {
       LocalShuffleFile commitTarget = getCommitTarget();
       if (commitTarget != null) {
@@ -119,7 +114,6 @@ public class LocalTmpShuffleFile extends LocalShuffleFile implements TmpShuffleF
 
   @Override
   public UUID uuid() {
-    //TODO:Done
     return this.uuid;
   }
 

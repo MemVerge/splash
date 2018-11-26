@@ -133,7 +133,6 @@ private[spark] class SplashObjectWriter(
       closeResources()
     } {
       if (numRecordsWritten != 0) {
-        // TODO, deal with this truncate
         logInfo(s"Should truncate $numRecordsWritten items but cannot.")
       }
     }

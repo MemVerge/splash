@@ -25,7 +25,6 @@ public class LocalTmpFileFolder {
 
   }
 
-  //TODO-- take notice of this
   public static void cleanup() {
     folders.values().forEach(LocalTmpFileFolder::remove);
   }
