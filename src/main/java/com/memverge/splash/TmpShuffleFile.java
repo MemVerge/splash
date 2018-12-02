@@ -16,9 +16,12 @@
 package com.memverge.splash;
 
 import java.io.IOException;
+import java.io.OutputStream;
 import java.util.UUID;
 
 public interface TmpShuffleFile extends ShuffleFile {
+
+  TmpShuffleFile create() throws IOException;
 
   void swap(TmpShuffleFile other) throws IOException;
 
@@ -29,4 +32,14 @@ public interface TmpShuffleFile extends ShuffleFile {
   void recall();
 
   UUID uuid();
+
+  default OutputStream makeOutputStream() {
+    return makeOutputStream(false);
+  }
+
+  default OutputStream makeOutputStream(boolean create) {
+    return makeOutputStream(false, create);
+  }
+
+  OutputStream makeOutputStream(boolean append, boolean create);
 }

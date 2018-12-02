@@ -81,3 +81,9 @@ Splash uses plugins to support different storage.  User could develop their own
 storage plugins for the shuffle manager.  And different storage could be used
 based on the usage of the file.  For detail, please check the 
 [Plugin API](doc/Plugin_API.md) document.
+
+The Splash project is released with 2 default plugins:
+* plugin for shared file system like NFS, use following storage factory:
+  `com.memverge.splash.shared.SharedFSFactory`
+* plugin for Spark block manager with local disk storage:
+  `org.apache.spark.shuffle.local.LocalStorageFactory`

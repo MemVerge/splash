@@ -5,9 +5,8 @@ package org.apache.spark.shuffle
 
 import com.memverge.splash.StorageFactoryHolder
 import org.apache.spark._
-import org.apache.spark.serializer.{JavaSerializer, KryoSerializer}
 import org.assertj.core.api.Assertions.assertThat
-import org.testng.annotations.{AfterClass, AfterMethod, DataProvider, Test}
+import org.testng.annotations.{AfterMethod, DataProvider, Test}
 
 import scala.collection.mutable.ArrayBuffer
 import scala.util.Random
@@ -18,7 +17,6 @@ class SplashSorterTest {
   private var sc: SparkContext = _
   private var sorter: SplashSorter[Int, Int, Int] = _
   private var strSorter: SplashSorter[String, String, String] = _
-  private val storageFactory = StorageFactoryHolder.getFactory
 
   @AfterMethod
   def afterMethod(): Unit = {
@@ -34,22 +32,17 @@ class SplashSorterTest {
       sc.stop()
       sc = null
     }
+    val storageFactory = StorageFactoryHolder.getFactory
     storageFactory.reset()
     assertThat(storageFactory.getTmpFileCount).isEqualTo(0)
   }
 
-  private val confWithKryo = TestUtil.newBaseShuffleConf
-      .set("spark.serializer", classOf[KryoSerializer].getName)
-  private val confWithoutKryo = TestUtil.newBaseShuffleConf
-      .set("spark.serializer.objectStreamReset", "1")
-      .set("spark.serializer", classOf[JavaSerializer].getName)
-
-  @DataProvider(name = "sparkConfSerializer")
+  @DataProvider(name = "sparkConfArray")
   def sparkConfWithDifferentSer: Array[SparkConf] = {
-    Array(confWithKryo, confWithoutKryo)
+    TestUtil.getSparkConfArray
   }
 
-  @Test(dataProvider = "sparkConfSerializer")
+  @Test(dataProvider = "sparkConfArray")
   def testEmptyDataStreamBothAggAndOrd(conf: SparkConf): Unit = {
     sc = TestUtil.newSparkContext(conf)
 
@@ -62,7 +55,7 @@ class SplashSorterTest {
     assertThat(sorter.toSeq) isEqualTo Seq()
   }
 
-  @Test(dataProvider = "sparkConfSerializer")
+  @Test(dataProvider = "sparkConfArray")
   def testEmptyDataStreamOnlyAgg(conf: SparkConf): Unit = {
     sc = TestUtil.newSparkContext(conf)
 
@@ -75,7 +68,7 @@ class SplashSorterTest {
     assertThat(sorter.toSeq) isEqualTo Seq()
   }
 
-  @Test(dataProvider = "sparkConfSerializer")
+  @Test(dataProvider = "sparkConfArray")
   def testEmptyDataStreamOnlyOrd(conf: SparkConf): Unit = {
     sc = TestUtil.newSparkContext(conf)
 
@@ -88,7 +81,7 @@ class SplashSorterTest {
     assertThat(sorter.toSeq) isEqualTo Seq()
   }
 
-  @Test(dataProvider = "sparkConfSerializer")
+  @Test(dataProvider = "sparkConfArray")
   def testEmptyDataStreamNoAggOrOrd(conf: SparkConf): Unit = {
     sc = TestUtil.newSparkContext(conf)
 
@@ -101,7 +94,7 @@ class SplashSorterTest {
     assertThat(sorter.toSeq) isEqualTo Seq()
   }
 
-  @Test(dataProvider = "sparkConfSerializer")
+  @Test(dataProvider = "sparkConfArray")
   def testFewElementsPerPartitionBothAggAndOrd(conf: SparkConf): Unit = {
     sc = TestUtil.newSparkContext(conf)
 
@@ -125,7 +118,7 @@ class SplashSorterTest {
     assertThat(sorter.toSet) isEqualTo expected
   }
 
-  @Test(dataProvider = "sparkConfSerializer")
+  @Test(dataProvider = "sparkConfArray")
   def testFewElementsPerPartitionOnlyAgg(conf: SparkConf): Unit = {
     sc = TestUtil.newSparkContext(conf)
 
@@ -149,7 +142,7 @@ class SplashSorterTest {
     assertThat(sorter.toSet) isEqualTo expected
   }
 
-  @Test(dataProvider = "sparkConfSerializer")
+  @Test(dataProvider = "sparkConfArray")
   def testFewElementsPerPartitionOnlyOrd(conf: SparkConf): Unit = {
     sc = TestUtil.newSparkContext(conf)
 
@@ -173,7 +166,7 @@ class SplashSorterTest {
     assertThat(sorter.toSet) isEqualTo expected
   }
 
-  @Test(dataProvider = "sparkConfSerializer")
+  @Test(dataProvider = "sparkConfArray")
   def testFewElementsPerPartitionNoAggOrOrd(conf: SparkConf): Unit = {
     sc = TestUtil.newSparkContext(conf)
 
@@ -203,7 +196,7 @@ class SplashSorterTest {
     TestUtil.newSparkContext(conf)
   }
 
-  @Test(dataProvider = "sparkConfSerializer")
+  @Test(dataProvider = "sparkConfArray")
   def testEmptyPartitionsWithSpilling(conf: SparkConf): Unit = {
     val size = 1000
     sc = newSparkContextWithForceSpillSize(conf, size / 2)
@@ -321,10 +314,10 @@ class SplashSorterTest {
   def testCleanupIntermediateFilesInSorter(option: FailuresOption): Unit = {
     val size = 1200
     val withFailures = option.injectFailure
-    sc = newSparkContextWithForceSpillSize(confWithoutKryo, size / 4)
+    sc = newSparkContextWithForceSpillSize(TestUtil.confWithoutKryo, size / 4)
     val ord = implicitly[Ordering[Int]]
     val expectedSize = if (withFailures) size - 1 else size
-    val context = TestUtil.newTaskContext(confWithoutKryo)
+    val context = TestUtil.newTaskContext(TestUtil.confWithoutKryo)
     val sorter = new SplashSorter[Int, Int, Int](
       context, None, Some(new HashPartitioner(3)), Some(ord))
     if (withFailures) {
@@ -344,6 +337,8 @@ class SplashSorterTest {
 
     assertThat(sorter.iterator.toSet) isEqualTo (0 until expectedSize).map(i => (i, i)).toSet
     assertThat(sorter.numSpills) isGreaterThan 0
+
+    val storageFactory = StorageFactoryHolder.getFactory
     assertThat(storageFactory.getTmpFileCount) isGreaterThan 0
     sorter.stop()
     assertThat(storageFactory.getTmpFileCount) isEqualTo 0
@@ -353,7 +348,7 @@ class SplashSorterTest {
   def testCleanupIntermediateFilesInShuffle(option: FailuresOption): Unit = {
     val size = 1200
     val withFailures = option.injectFailure
-    sc = newSparkContextWithForceSpillSize(confWithoutKryo, size / 4)
+    sc = newSparkContextWithForceSpillSize(TestUtil.confWithoutKryo, size / 4)
     val data = sc.parallelize(0 until size, 2).map { i =>
       if (withFailures && i == size - 1) {
         throw TestUtil.IntentionalFailure()
@@ -361,6 +356,7 @@ class SplashSorterTest {
       (i, i)
     }
 
+    val storageFactory = StorageFactoryHolder.getFactory
     TestUtil.assertSpilled(sc) {
       if (withFailures) {
         try {
@@ -438,7 +434,7 @@ class SplashSorterTest {
     assertThat(results) isEqualTo expected
   }
 
-  @Test(dataProvider = "sparkConfSerializer",
+  @Test(dataProvider = "sparkConfArray",
     expectedExceptions = Array(classOf[IllegalArgumentException]))
   def testSortBreakingSortingContracts(conf: SparkConf): Unit = {
     val size = 10000
@@ -463,7 +459,7 @@ class SplashSorterTest {
     strSorter.iterator
   }
 
-  @Test(dataProvider = "sparkConfSerializer")
+  @Test(dataProvider = "sparkConfArray")
   def testSortWithoutBreakingSortingContracts(conf: SparkConf): Unit = {
     val size = 1000
     sc = newSparkContextWithForceSpillSize(conf, size / 2)
@@ -503,7 +499,7 @@ class SplashSorterTest {
 
   def testSpillWithHashCollisions(): Unit = {
     val size = 1000
-    sc = newSparkContextWithForceSpillSize(confWithoutKryo, size / 2)
+    sc = newSparkContextWithForceSpillSize(TestUtil.confWithoutKryo, size / 2)
     val context = TestUtil.newTaskContext(sc.conf)
 
     def createCombiner(i: String): ArrayBuffer[String] = ArrayBuffer[String](i)
@@ -562,7 +558,7 @@ class SplashSorterTest {
 
   def testWithManyHashCollisions(): Unit = {
     val size = 1000
-    sc = newSparkContextWithForceSpillSize(confWithoutKryo, size / 2)
+    sc = newSparkContextWithForceSpillSize(TestUtil.confWithoutKryo, size / 2)
     val context = TestUtil.newTaskContext(sc.conf)
     val agg = new Aggregator[FixedHash, Int, Int](_ => 1, _ + _, _ + _)
 
@@ -584,7 +580,7 @@ class SplashSorterTest {
 
   def testSpillWithHashCollisionsUsingIntMaxValueKey(): Unit = {
     val size = 1000
-    sc = newSparkContextWithForceSpillSize(confWithoutKryo, size / 2)
+    sc = newSparkContextWithForceSpillSize(TestUtil.confWithoutKryo, size / 2)
     val context = TestUtil.newTaskContext(sc.conf)
 
     def createCombiner(i: Int): ArrayBuffer[Int] = ArrayBuffer[Int](i)
@@ -609,7 +605,7 @@ class SplashSorterTest {
 
   def testSpillWithNullKeysAndValues(): Unit = {
     val size = 1000
-    sc = newSparkContextWithForceSpillSize(confWithoutKryo, size / 2)
+    sc = newSparkContextWithForceSpillSize(TestUtil.confWithoutKryo, size / 2)
     val context = TestUtil.newTaskContext(sc.conf)
 
     def createCombiner(i: String): ArrayBuffer[String] = ArrayBuffer[String](i)
@@ -637,7 +633,7 @@ class SplashSorterTest {
 
   def testSortUpdatesPeakExecutionMemory(): Unit = {
     val size = 1000
-    sc = newSparkContextWithForceSpillSize(confWithoutKryo, size)
+    sc = newSparkContextWithForceSpillSize(TestUtil.confWithoutKryo, size)
     TestUtil.verifyPeakExecutionMemorySet(sc, "external sorter without spilling") {
       TestUtil.assertNotSpilled(sc) {
         sc.parallelize(1 to size / 2, 2).repartition(100).count()
@@ -652,7 +648,7 @@ class SplashSorterTest {
 
   def testZeroPartitionLength(): Unit = {
     val size = 500
-    sc = newSparkContextWithForceSpillSize(confWithoutKryo, size / 2)
+    sc = newSparkContextWithForceSpillSize(TestUtil.confWithoutKryo, size / 2)
     val actual = sc.parallelize((1 to size).map(FixedHash(_, 10)), 4)
         .keyBy(f => f.hashCode())
         .reduceByKey((v1, v2) => FixedHash(v1.v + v2.v, v1.h))

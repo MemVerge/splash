@@ -38,6 +38,10 @@ public interface StorageFactory {
   // metadata
   String getShuffleFolder(String appId);
 
+  default void cleanShuffle(String appId) throws IOException {
+    getDataFile(getShuffleFolder(appId)).delete();
+  }
+
   int getShuffleFileCount(String appId);
 
   int getTmpFileCount() throws IOException;

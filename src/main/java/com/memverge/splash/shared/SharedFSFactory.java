@@ -18,6 +18,7 @@ package com.memverge.splash.shared;
 import com.memverge.splash.ShuffleFile;
 import com.memverge.splash.ShuffleListener;
 import com.memverge.splash.StorageFactory;
+import com.memverge.splash.TempFolder;
 import com.memverge.splash.TmpShuffleFile;
 import java.io.IOException;
 import java.util.Collection;
@@ -25,7 +26,7 @@ import java.util.Collections;
 
 public class SharedFSFactory implements StorageFactory {
 
-  private SharedFSFolder folder = SharedFSFolder.getInstance();
+  private TempFolder folder = TempFolder.getInstance();
 
   @Override
   public TmpShuffleFile makeSpillFile() throws IOException {

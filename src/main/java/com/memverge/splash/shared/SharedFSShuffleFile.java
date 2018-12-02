@@ -38,17 +38,6 @@ public class SharedFSShuffleFile implements ShuffleFile {
   }
 
   @Override
-  public ShuffleFile create() throws IOException {
-    boolean created = getFile().createNewFile();
-    if (!created) {
-      log.warn("file {} already exists.", getId());
-    } else {
-      log.debug("file {} created.", getId());
-    }
-    return this;
-  }
-
-  @Override
   public long getSize() {
     return file.length();
   }
@@ -61,11 +50,6 @@ public class SharedFSShuffleFile implements ShuffleFile {
   @Override
   public boolean exists() {
     return file.exists();
-  }
-
-  @Override
-  public String[] list() {
-    return file.list();
   }
 
   @Override
@@ -86,33 +70,7 @@ public class SharedFSShuffleFile implements ShuffleFile {
     return ret;
   }
 
-  @Override
-  public OutputStream makeOutputStream(boolean append, boolean create) {
-    if (!exists()) {
-      if (create) {
-        try {
-          create();
-        } catch (IOException e) {
-          String msg = String.format("Create file %s failed.", getId());
-          throw new IllegalArgumentException(msg, e);
-        }
-      } else {
-        String msg = String.format("%s not found.", getId());
-        throw new IllegalArgumentException(msg);
-      }
-    }
-    OutputStream ret;
-    try {
-      ret = new FileOutputStream(file, append);
-      log.debug("create output stream for {}.", getId());
-    } catch (FileNotFoundException e) {
-      String msg = String.format("File %s not found?", getId());
-      throw new IllegalArgumentException(msg, e);
-    }
-    return ret;
-  }
-
-  private File getFile() {
+  protected File getFile() {
     return file;
   }
 

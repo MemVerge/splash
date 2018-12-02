@@ -4,13 +4,27 @@
 package org.apache.spark.shuffle
 
 import com.memverge.splash.StorageFactoryHolder
+import org.apache.spark.SparkContext
 import org.assertj.core.api.Assertions.assertThat
-import org.testng.annotations.{AfterMethod, BeforeMethod, Test}
+import org.testng.annotations._
 
 
 @Test(groups = Array("UnitTest", "IntegrationTest"))
 class SplashShuffleBlockResolverTest {
   private var resolver: SplashShuffleBlockResolver = _
+  private var sc: SparkContext = _
+
+  @BeforeClass
+  def beforeClass(): Unit = {
+    sc = TestUtil.newSparkContext(TestUtil.newSparkConf())
+  }
+
+  @AfterClass
+  def afterClass(): Unit = {
+    if (sc != null) {
+      sc.stop()
+    }
+  }
 
   @BeforeMethod
   def beforeMethod(): Unit = {
@@ -82,8 +96,8 @@ class SplashShuffleBlockResolverTest {
 
   def testRemoveDataByMap(): Unit = {
     val mapId = 3
-    val dataFile = resolver.getDataFile(shuffleId, mapId).create()
-    val indexFile = resolver.getIndexFile(shuffleId, mapId).create()
+    val dataFile = resolver.getDataTmpFile(shuffleId, mapId).create().commit()
+    val indexFile = resolver.getIndexTmpFile(shuffleId, mapId).create().commit()
 
     assertThat(dataFile.exists()) isTrue()
     assertThat(indexFile.exists()) isTrue()
@@ -106,8 +120,8 @@ class SplashShuffleBlockResolverTest {
   def testCheckIndexAndDataFileSizeNotMatch(): Unit = {
     val indices = Array(10L, 0L, 20L)
     val mapId = 5
-    resolver.writeIndices(resolver.getIndexFile(shuffleId, mapId), indices)
-    resolver.writeData(resolver.getDataFile(shuffleId, mapId), new Array[Byte](29))
+    resolver.writeIndices(resolver.getIndexTmpFile(shuffleId, mapId), indices)
+    resolver.writeData(resolver.getDataTmpFile(shuffleId, mapId), new Array[Byte](29))
 
     val actual = resolver.checkIndexAndDataFile(shuffleId, mapId)
     assertThat(actual) isNull()

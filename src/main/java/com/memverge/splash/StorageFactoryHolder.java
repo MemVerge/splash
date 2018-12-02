@@ -42,28 +42,27 @@ public class StorageFactoryHolder {
   }
 
   private SparkConf getSparkConf() {
-    if (conf == null) {
-      SparkEnv sparkEnv = SparkEnv.get();
-      if (sparkEnv != null) {
-        SparkConf sparkConf = sparkEnv.conf();
-        if (sparkConf != null) {
-          conf = sparkConf;
-        }
-      }
+    SparkConf ret;
+    try {
+      ret = SparkEnv.get().conf();
+    } catch (NullPointerException e) {
+      ret = null;
     }
-    return conf;
+    return ret;
   }
 
   private StorageFactory factory = null;
 
   private StorageFactory getRealFactory() {
-    if (factory == null) {
+    SparkConf sparkConf = getSparkConf();
+    if (factory == null || conf != sparkConf) {
       synchronized (this) {
-        if (factory == null) {
-          SparkConf sparkConf = getSparkConf();
+        sparkConf = getSparkConf();
+        if (factory == null || conf != sparkConf) {
+          conf = sparkConf;
           String clzName;
-          if (sparkConf != null) {
-            clzName = sparkConf.get(SplashOpts.storageFactoryName());
+          if (conf != null) {
+            clzName = conf.get(SplashOpts.storageFactoryName());
           } else {
             clzName = SplashOpts.storageFactoryName().defaultValueString();
           }

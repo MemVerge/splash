@@ -4,22 +4,14 @@
 package org.apache.spark.shuffle.sort
 
 import com.memverge.splash.StorageFactoryHolder
-import org.apache.spark.serializer.{JavaSerializer, KryoSerializer}
 import org.apache.spark.shuffle.{ConfWithReducerN, SplashOpts, TestUtil}
 import org.apache.spark.{SparkConf, SparkContext}
 import org.assertj.core.api.Assertions.assertThat
-import org.testng.annotations.{AfterClass, AfterMethod, DataProvider, Test}
+import org.testng.annotations.{AfterMethod, DataProvider, Test}
 
 @Test(groups = Array("UnitTest", "IntegrationTest"))
 class SplashUnsafeSorterTest {
   private var sc: SparkContext = _
-  private val storageFactory = StorageFactoryHolder.getFactory
-
-  private val confWithKryo = TestUtil.newSparkConf()
-      .set("spark.serializer", classOf[KryoSerializer].getName)
-  private val confWithoutKryo = TestUtil.newSparkConf()
-      .set("spark.serializer.objectStreamReset", "1")
-      .set("spark.serializer", classOf[JavaSerializer].getName)
 
   @AfterMethod
   def afterMethod(): Unit = {
@@ -27,6 +19,7 @@ class SplashUnsafeSorterTest {
       sc.stop()
       sc = null
     }
+    val storageFactory = StorageFactoryHolder.getFactory
     storageFactory.reset()
     assertThat(storageFactory.getTmpFileCount).isEqualTo(0)
   }
@@ -38,7 +31,7 @@ class SplashUnsafeSorterTest {
   }
 
   private def sparkConfWithDifferentSer: Array[SparkConf] = {
-    Array(confWithKryo, confWithoutKryo)
+    TestUtil.getSparkConfArray
   }
 
   private def confWithReducerNumList: Array[ConfWithReducerN] = {
@@ -59,7 +52,7 @@ class SplashUnsafeSorterTest {
 
   @Test(dataProvider = "confWithDiffFastMerge")
   def testSpillLocalSortByKey(conf: ConfWithReducerN): Unit = {
-    val size = 5000
+    val size = 1000
     sc = newSparkContextWithForceSpillSize(conf.conf, size / 4)
     TestUtil.assertSpilled(sc) {
       val result = sc.parallelize(0 until size)
@@ -77,7 +70,7 @@ class SplashUnsafeSorterTest {
 
   @Test(dataProvider = "confWithDiffFastMerge")
   def testSpillLocalCoGroup(conf: ConfWithReducerN): Unit = {
-    val size = 5000
+    val size = 1000
     sc = newSparkContextWithForceSpillSize(conf.conf, size / 4)
     TestUtil.assertSpilled(sc) {
       val rdd1 = sc.parallelize(0 until size).map { i => (i / 2, i) }
@@ -96,7 +89,7 @@ class SplashUnsafeSorterTest {
 
   def testSortUpdatesPeakExecutionMemory(): Unit = {
     val size = 1000
-    sc = newSparkContextWithForceSpillSize(confWithoutKryo, size)
+    sc = newSparkContextWithForceSpillSize(TestUtil.confWithoutKryo, size)
     TestUtil.verifyPeakExecutionMemorySet(sc, "external sorter without spilling") {
       TestUtil.assertNotSpilled(sc) {
         sc.parallelize(1 to size / 2, 2).repartition(100).count()

@@ -225,7 +225,7 @@ private[spark] class SplashShuffleBlockResolver(
     ret
   }
 
-  def writeData(dataFile: ShuffleFile, data: Array[Byte]): Unit = {
+  def writeData(dataFile: TmpShuffleFile, data: Array[Byte]): Unit = {
     SplashUtils.withResources(
       new BufferedOutputStream(
         dataFile.makeOutputStream(true))) {
@@ -233,7 +233,7 @@ private[spark] class SplashShuffleBlockResolver(
     }
   }
 
-  def writeIndices(indexFile: ShuffleFile, indices: Array[Long]): Unit = {
+  def writeIndices(indexFile: TmpShuffleFile, indices: Array[Long]): Unit = {
     SplashUtils.withResources(
       new DataOutputStream(
         new BufferedOutputStream(
@@ -253,6 +253,6 @@ private[spark] class SplashShuffleBlockResolver(
 
   def cleanup(): Unit = {
     logInfo(s"cleanup shuffle folder $shuffleFolder for $appId")
-    storageFactory.getDataFile(shuffleFolder).delete()
+    storageFactory.cleanShuffle(appId)
   }
 }

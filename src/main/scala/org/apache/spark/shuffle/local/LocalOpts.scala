@@ -13,21 +13,14 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package com.memverge.splash;
+package org.apache.spark.shuffle.local
 
-import java.io.IOException;
-import java.io.InputStream;
-import java.io.OutputStream;
+import org.apache.spark.internal.config.{ConfigBuilder, ConfigEntry}
 
-public interface ShuffleFile {
-
-  long getSize();
-
-  boolean delete() throws IOException;
-
-  boolean exists() throws IOException;
-
-  String getId();
-
-  InputStream makeInputStream();
+object LocalOpts {
+  val alwaysUseRemote: ConfigEntry[Boolean] =
+    ConfigBuilder("splash.local.internal.alwaysRemote")
+        .doc("Always retrieves data from remote interface, debug/test only")
+        .booleanConf
+        .createWithDefault(false)
 }
