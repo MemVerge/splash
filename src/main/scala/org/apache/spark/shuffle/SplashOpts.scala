@@ -31,6 +31,12 @@ object SplashOpts {
         .stringConf
         .createWithDefault("com.memverge.splash.shared.SharedFSFactory")
 
+  val localSplashFolder: ConfigEntry[String] =
+    ConfigBuilder("spark.shuffle.splash.folder")
+        .doc("location of the local folder")
+        .stringConf
+        .createWithDefault(null)
+
   val clearShuffleOutput: ConfigEntry[Boolean] =
     ConfigBuilder("spark.shuffle.splash.clearShuffleOutput")
         .doc("clear shuffle output if set to true.")

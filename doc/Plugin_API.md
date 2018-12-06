@@ -31,14 +31,14 @@ this class could be divided into following categories.
 ## `ShuffleFile` interface
 
 The interface for all shuffle related files.  The interface looks like a normal
-Java `File`.  And it contains generator functions for `InputStream` and 
-`OutputStream`.
+Java `File`.  And it contains generator functions for `InputStream`.
 
 ## `TmpShuffleFile` interface
 
 This interface extends the `ShuffleFile` interface.  The main additional 
 functions are `commit` and `recall`.  These methods are atomic methods that 
-allow user to commit the shuffle output or recall it.
+allow user to commit the shuffle output or recall it.  And it contains generator
+functions for `OutputStream`.
 
 ## `ShuffleListener` interface
 

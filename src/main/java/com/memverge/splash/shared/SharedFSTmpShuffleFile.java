@@ -16,9 +16,13 @@
 package com.memverge.splash.shared;
 
 import com.memverge.splash.ShuffleFile;
+import com.memverge.splash.TempFolder;
 import com.memverge.splash.TmpShuffleFile;
 import java.io.File;
+import java.io.FileNotFoundException;
+import java.io.FileOutputStream;
 import java.io.IOException;
+import java.io.OutputStream;
 import java.nio.file.Paths;
 import java.util.UUID;
 import org.slf4j.Logger;
@@ -30,13 +34,12 @@ public class SharedFSTmpShuffleFile extends SharedFSShuffleFile implements
   private static final Logger log = LoggerFactory
       .getLogger(SharedFSTmpShuffleFile.class);
 
-  private static SharedFSFolder folder = SharedFSFolder.getInstance();
+  private static TempFolder folder = TempFolder.getInstance();
 
   private static final String TMP_FILE_PREFIX = "tmp-";
   private SharedFSShuffleFile commitTarget = null;
 
   private UUID uuid = null;
-  private String targetId = null;
 
   private SharedFSTmpShuffleFile(String pathname) {
     super(pathname);
@@ -63,8 +66,26 @@ public class SharedFSTmpShuffleFile extends SharedFSShuffleFile implements
     }
     SharedFSTmpShuffleFile ret = make();
     ret.commitTarget = (SharedFSShuffleFile) file;
-    ret.targetId = file.getId();
     return ret;
+  }
+
+  @Override
+  public TmpShuffleFile create() throws IOException {
+    File parent = getFile().getParentFile();
+    if (!parent.exists()) {
+      boolean created = parent.mkdirs();
+      if (!created) {
+        log.info("parent folder {} creation return false.",
+            parent.getAbsolutePath());
+      }
+    }
+    boolean created = getFile().createNewFile();
+    if (!created) {
+      log.warn("file {} already exists.", getId());
+    } else {
+      log.debug("file {} created.", getId());
+    }
+    return this;
   }
 
   @Override
@@ -107,7 +128,7 @@ public class SharedFSTmpShuffleFile extends SharedFSShuffleFile implements
     log.debug("commit tmp file {} to target file {}.",
         getId(), getCommitTarget().getId());
 
-    rename(this.targetId);
+    rename(commitTarget.getId());
     return commitTarget;
   }
 
@@ -121,6 +142,32 @@ public class SharedFSTmpShuffleFile extends SharedFSShuffleFile implements
       log.info("recall tmp file {} without target file.", getId());
     }
     delete();
+  }
+
+  @Override
+  public OutputStream makeOutputStream(boolean append, boolean create) {
+    if (!exists()) {
+      if (create) {
+        try {
+          create();
+        } catch (IOException e) {
+          String msg = String.format("Create file %s failed.", getId());
+          throw new IllegalArgumentException(msg, e);
+        }
+      } else {
+        String msg = String.format("%s not found.", getId());
+        throw new IllegalArgumentException(msg);
+      }
+    }
+    OutputStream ret;
+    try {
+      ret = new FileOutputStream(file, append);
+      log.debug("create output stream for {}.", getId());
+    } catch (FileNotFoundException e) {
+      String msg = String.format("File %s not found?", getId());
+      throw new IllegalArgumentException(msg, e);
+    }
+    return ret;
   }
 
   @Override

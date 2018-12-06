@@ -12,7 +12,8 @@ import org.apache.spark._
 import org.apache.spark.memory.{MemoryManager, MemoryMode, TaskMemoryManager}
 import org.apache.spark.metrics.MetricsSystem
 import org.apache.spark.scheduler._
-import org.apache.spark.serializer.JavaSerializer
+import org.apache.spark.serializer.{JavaSerializer, KryoSerializer}
+import org.apache.spark.shuffle.local.{LocalOpts, LocalStorageFactory}
 import org.apache.spark.storage.BlockId
 import org.assertj.core.api.Assertions.assertThat
 
@@ -20,26 +21,26 @@ import scala.collection.mutable
 import scala.collection.mutable.ArrayBuffer
 import scala.util.control.NonFatal
 
-private[spark] object TestUtil {
+object TestUtil {
   private def newMemoryManager(conf: SparkConf): MemoryManager = {
     val onHeapStorageMemory = 100 * 1024 * 1024
     val onHeapExeMemory = 200 * 1024 * 1024
     val cores = 4
     new MemoryManager(
       conf, cores, onHeapStorageMemory, onHeapExeMemory) {
-      /** @inheritdoc*/
+      /** @inheritdoc */
       override def maxOnHeapStorageMemory: Long = onHeapStorageMemory
 
-      /** @inheritdoc*/
+      /** @inheritdoc */
       override def maxOffHeapStorageMemory: Long = onHeapStorageMemory * 2
 
-      /** @inheritdoc*/
+      /** @inheritdoc */
       override def acquireStorageMemory(
           blockId: BlockId,
           numBytes: Long,
           memoryMode: MemoryMode): Boolean = true
 
-      /** @inheritdoc*/
+      /** @inheritdoc */
       override def acquireUnrollMemory(
           blockId: BlockId,
           numBytes: Long,
@@ -142,11 +143,35 @@ private[spark] object TestUtil {
   def IntentionalFailure(): Exception = {
     new SparkException("INTENTIONAL failure, ignore this.")
   }
+
+  def confWithKryo: SparkConf = newBaseShuffleConf
+      .set("spark.serializer", classOf[KryoSerializer].getName)
+
+  def confWithoutKryo: SparkConf = newBaseShuffleConf
+      .set("spark.serializer.objectStreamReset", "1")
+      .set("spark.serializer", classOf[JavaSerializer].getName)
+
+  private def confWithStorageFactory(factoryName: String) =
+    confWithKryo.set("spark.shuffle.splash.storageFactory", factoryName)
+
+  private def confWithLocalStorage(alwaysRemote: Boolean) =
+    confWithStorageFactory(classOf[LocalStorageFactory].getName)
+        .set(LocalOpts.alwaysUseRemote, alwaysRemote)
+
+
+  def getSparkConfArray: Array[SparkConf] = {
+    Array(
+      confWithKryo,
+      confWithoutKryo,
+      confWithLocalStorage(true),
+      confWithLocalStorage(false)
+    )
+  }
 }
 
 /**
-  * A dummy class that always returns the same hash code, to easily test hash collisions
-  */
+ * A dummy class that always returns the same hash code, to easily test hash collisions
+ */
 case class FixedHash(v: Int, h: Int) extends Serializable {
   override def hashCode(): Int = h
 
@@ -159,8 +184,8 @@ case class FixedHash(v: Int, h: Int) extends Serializable {
 }
 
 /**
-  * A simple listener that keeps track of the TaskInfos and StageInfos of all completed jobs.
-  */
+ * A simple listener that keeps track of the TaskInfos and StageInfos of all completed jobs.
+ */
 private class SaveInfoListener extends SparkListener {
   type StageId = Int
   type StageAttemptId = Int
@@ -183,9 +208,9 @@ private class SaveInfoListener extends SparkListener {
     completedTaskInfos.getOrElse((stageId, stageAttemptId), Seq.empty[TaskInfo])
 
   /**
-    * If `jobCompletionCallback` is set, block until the next call has finished.
-    * If the callback failed with an exception, throw it.
-    */
+   * If `jobCompletionCallback` is set, block until the next call has finished.
+   * If the callback failed with an exception, throw it.
+   */
   def awaitNextJobCompletion(): Unit = {
     if (jobCompletionCallback != null) {
       jobCompletionSem.acquire()
@@ -196,9 +221,9 @@ private class SaveInfoListener extends SparkListener {
   }
 
   /**
-    * Register a callback to be called on job end.
-    * A call to this should be followed by [[awaitNextJobCompletion]].
-    */
+   * Register a callback to be called on job end.
+   * A call to this should be followed by [[awaitNextJobCompletion]].
+   */
   def registerJobCompletionCallback(callback: () => Unit): Unit = {
     jobCompletionCallback = callback
   }

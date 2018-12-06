@@ -7,7 +7,7 @@
 
   <groupId>com.memverge</groupId>
   <artifactId>splash</artifactId>
-  <version>0.1.0</version>
+  <version>0.2.0</version>
   <name>splash</name>
 
   <properties>
