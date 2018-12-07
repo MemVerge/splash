@@ -78,6 +78,13 @@ object SplashOpts {
   // compatible entries for spark 2.1, scala 2.10, migrated from spark 2.3
   val shuffleFileBufferKB: ConfigEntry[Long] = config.SHUFFLE_FILE_BUFFER_SIZE
 
+  val bypassSortThreshold: ConfigEntry[Int] =
+    createIfNotExists("spark.shuffle.sort.bypassMergeThreshold", builder => {
+      builder.doc("Use bypass merge sort shuffle writer if partition is lower than this")
+          .intConf
+          .createWithDefault(200)
+    })
+
   private def createIfNotExists[T](
       optionKey: String,
       f: ConfigBuilder => ConfigEntry[T]): ConfigEntry[T] = {
