@@ -44,7 +44,11 @@ class SplashShuffleManager(conf: SparkConf) extends ShuffleManager with Logging 
       shuffleId: Int,
       numMaps: Int,
       dependency: ShuffleDependency[K, V, C]): ShuffleHandle = {
-    if (useSerializedShuffle(dependency)) {
+    if (shouldBypassMergeSort(dependency)) {
+      new SplashBypassMergeSortShuffleHandle[K, V](
+        shuffleId, numMaps, dependency.asInstanceOf[ShuffleDependency[K, V, V]]
+      )
+    } else if (useSerializedShuffle(dependency)) {
       // Try to buffer map outputs in a serialized form, since this
       // is more efficient:
       new SplashSerializedShuffleHandle[K, V](
@@ -71,6 +75,12 @@ class SplashShuffleManager(conf: SparkConf) extends ShuffleManager with Logging 
           mapId,
           context,
           SplashSerializer(unsafeShuffleHandle.dependency))
+      case bypassShuffleHandle: SplashBypassMergeSortShuffleHandle[K@unchecked, V@unchecked] =>
+        new SplashBypassMergeSortShuffleWriter(
+          shuffleBlockResolver,
+          bypassShuffleHandle,
+          mapId,
+          context)
       case other: BaseShuffleHandle[K@unchecked, V@unchecked, _] =>
         new SplashShuffleWriter(
           shuffleBlockResolver,
@@ -148,6 +158,16 @@ class SplashShuffleManager(conf: SparkConf) extends ShuffleManager with Logging 
       true
     }
   }
+
+  private def shouldBypassMergeSort(dep: ShuffleDependency[_, _, _]): Boolean = {
+    if (dep.mapSideCombine) {
+      require(dep.aggregator.isDefined, "Map-side combine without Aggregator specified!")
+      false
+    } else {
+      val bypassMergeThreshold: Int = conf.get(SplashOpts.bypassSortThreshold)
+      dep.partitioner.numPartitions <= bypassMergeThreshold
+    }
+  }
 }
 
 /**
@@ -155,6 +175,17 @@ class SplashShuffleManager(conf: SparkConf) extends ShuffleManager with Logging 
  * serialized shuffle.
  */
 private[spark] class SplashSerializedShuffleHandle[K, V](
+    shuffleId: Int,
+    numMaps: Int,
+    dependency: ShuffleDependency[K, V, V])
+    extends BaseShuffleHandle(shuffleId, numMaps, dependency) {
+}
+
+/**
+ * Subclass of [[BaseShuffleHandle]], used to identify when we've chosen to use the
+ * bypass merge sort shuffle path.
+ */
+private[spark] class SplashBypassMergeSortShuffleHandle[K, V](
     shuffleId: Int,
     numMaps: Int,
     dependency: ShuffleDependency[K, V, V])

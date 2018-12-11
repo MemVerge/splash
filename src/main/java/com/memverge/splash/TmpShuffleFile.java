@@ -15,9 +15,18 @@
  */
 package com.memverge.splash;
 
+import com.google.common.io.Closeables;
 import java.io.IOException;
+import java.io.InputStream;
 import java.io.OutputStream;
+import java.util.Collection;
+import java.util.List;
+import java.util.Objects;
 import java.util.UUID;
+import java.util.stream.Collectors;
+import org.apache.commons.io.IOUtils;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 public interface TmpShuffleFile extends ShuffleFile {
 
@@ -42,4 +51,29 @@ public interface TmpShuffleFile extends ShuffleFile {
   }
 
   OutputStream makeOutputStream(boolean append, boolean create);
+
+  default List<Long> merge(Collection<? extends ShuffleFile> srcFiles)
+      throws IOException {
+    final Logger log = LoggerFactory.getLogger(TmpShuffleFile.class);
+    final OutputStream out = makeOutputStream(true);
+    final List<Long> lengths = srcFiles.stream().map(file -> {
+      Long copied = null;
+      try (final InputStream in = file.makeInputStream()) {
+        copied = (long) IOUtils.copy(in, out);
+      } catch (IOException e) {
+        log.error("merge input from {} to {} failed.",
+            file.getId(), getId(), e);
+      } finally {
+        try {
+          file.delete();
+        } catch (IOException e) {
+          log.warn("delete {} failed.", file.getId(), e);
+        }
+      }
+      return copied;
+    }).collect(Collectors.toList());
+    final boolean threwException = lengths.stream().anyMatch(Objects::isNull);
+    Closeables.close(out, threwException);
+    return lengths;
+  }
 }

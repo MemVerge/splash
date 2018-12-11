@@ -1,5 +1,17 @@
 /*
- * Copyright (c) 2018  MemVerge Inc.
+ * Copyright (C) 2018 MemVerge Corp
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
 package org.apache.spark.shuffle
 
@@ -67,6 +79,7 @@ object TestUtil {
       .set("spark.hadoop.validateOutputSpecs", "false")
       .set("spark.shuffle.spill.batchSize", "10")
       .set("spark.shuffle.spill.initialMemoryThreshold", "512")
+      .set("spark.shuffle.sort.bypassMergeThreshold", "0")
 
   def newBaseShuffleConf: SparkConf = newSparkConf()
       .set("spark.shuffle.mvfs.useBaseShuffle", "true")
