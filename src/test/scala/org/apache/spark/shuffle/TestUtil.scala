@@ -80,6 +80,7 @@ object TestUtil {
       .set("spark.shuffle.spill.batchSize", "10")
       .set("spark.shuffle.spill.initialMemoryThreshold", "512")
       .set("spark.shuffle.sort.bypassMergeThreshold", "0")
+      .set("splash.local.internal.alwaysRemote", "false")
 
   def newBaseShuffleConf: SparkConf = newSparkConf()
       .set("spark.shuffle.mvfs.useBaseShuffle", "true")

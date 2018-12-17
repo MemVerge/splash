@@ -4,6 +4,10 @@
 
 <!DOCTYPE suite SYSTEM "http://testng.org/testng-1.0.dtd" >
 <suite name="unit test" verbose="1">
+  <listeners>
+    <listener class-name="org.apache.spark.shuffle.LogListener"/>
+  </listeners>
+
   <test name="Splash unit test">
     <groups>
       <run>

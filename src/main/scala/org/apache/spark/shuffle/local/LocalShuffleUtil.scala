@@ -89,9 +89,13 @@ object LocalShuffleUtil extends Logging {
       blockManager.putBytes(blockId,
         new ChunkedByteBuffer(Array[ByteBuffer](mappedBuffer)),
         StorageLevel.DISK_ONLY)
-      mappedBuffer.asInstanceOf[DirectBuffer].cleaner().clean()
       channel.close()
-      logInfo(s"delete $tgtId to make space for the real file.")
+      val cleaner = mappedBuffer.asInstanceOf[DirectBuffer].cleaner()
+      if (cleaner != null) {
+        logDebug(s"release direct buffer of ${tmpFile.getAbsolutePath}")
+        cleaner.clean()
+      }
+      logDebug(s"remove tmp file ${tmpFile.getAbsolutePath}")
       FileUtils.deleteQuietly(tmpFile)
     }
   }
