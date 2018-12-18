@@ -70,7 +70,7 @@ class LocalShuffleFile(path: String)
   override def getId: String = file.getAbsolutePath
 
   private def useRemote =
-    SparkEnv.get.conf.get(LocalOpts.alwaysUseRemote.key).toBoolean
+    SparkEnv.get.conf.get(LocalOpts.alwaysUseRemote.key, "false").toBoolean
 
   override def makeInputStream(): InputStream = {
     if (!useRemote && isLocal) {
