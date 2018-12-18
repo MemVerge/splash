@@ -56,6 +56,7 @@ public interface TmpShuffleFile extends ShuffleFile {
       throws IOException {
     final Logger log = LoggerFactory.getLogger(TmpShuffleFile.class);
     final OutputStream out = makeOutputStream(true);
+    log.info("merge {} files into {}.", srcFiles.size(), getId());
     final List<Long> lengths = srcFiles.stream().map(file -> {
       Long copied = null;
       try (final InputStream in = file.makeInputStream()) {

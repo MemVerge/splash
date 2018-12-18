@@ -86,7 +86,7 @@ class LocalTmpShuffleFile extends TmpShuffleFile with Logging {
     }
     if (commitTarget.exists()) {
       logWarning(s"commit target already exists, remove '${commitTarget.getId}'.")
-      commitTarget.delete()
+      commitTarget.file.delete()
     }
     logDebug(s"commit tmp file $getId to target file ${getCommitTarget.getId}.")
 

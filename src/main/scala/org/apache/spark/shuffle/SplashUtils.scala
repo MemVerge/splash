@@ -26,7 +26,7 @@ import org.apache.spark.internal.Logging
 
 import scala.util.control.NonFatal
 
-private[spark] object SplashUtils {
+private[spark] object SplashUtils extends Logging {
   def withResources[T <: AutoCloseable, V](r: => T)(f: T => V): V = {
     val resource: T = r
     require(resource != null, "resource is null")
@@ -36,6 +36,9 @@ private[spark] object SplashUtils {
     } catch {
       case NonFatal(e) =>
         exception = e
+        throw e
+      case e: Throwable =>
+        logError("fatal error received.", e)
         throw e
     } finally {
       closeAndAddSuppressed(exception, resource)

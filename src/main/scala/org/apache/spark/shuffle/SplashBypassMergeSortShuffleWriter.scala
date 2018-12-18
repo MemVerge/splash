@@ -84,7 +84,6 @@ private[spark] class SplashBypassMergeSortShuffleWriter[K, V](
         (0 until numPartitions).foreach(i => {
           val writer = partitionWriters(i)
           partitionTmpWrites(i) = writer.file
-          writer.commitAndGet()
           writer.close()
         })
 
@@ -138,8 +137,8 @@ private[spark] class SplashBypassMergeSortShuffleWriter[K, V](
           try {
             partitionWriters.foreach(writer => {
               val file = writer.revertPartialWritesAndClose()
-              if (!file.delete()) {
-                logError(s"Error while deleting file ${file.getId}")
+              if (file.exists() && !file.delete()) {
+                logWarning(s"Error while deleting file ${file.getId}")
               }
             })
           } finally {

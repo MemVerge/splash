@@ -56,7 +56,7 @@ private[spark] class SplashObjectWriter(
 
   private var initialized = false
 
-  private lazy val mcs: ManualCloseOutputStream = initialize()
+  private val mcs: ManualCloseOutputStream = initialize()
   private var countOs: CountingOutputStream = _
   private var bufferedOs: OutputStream = _
   private var objOs: SerializationStream = _

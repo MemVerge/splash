@@ -18,7 +18,7 @@ package org.apache.spark.shuffle
 import com.memverge.splash.{StorageFactoryHolder, TmpShuffleFile}
 import org.apache.spark.storage.ShuffleDataBlockId
 import org.assertj.core.api.Assertions.assertThat
-import org.testng.annotations.{AfterClass, Test}
+import org.testng.annotations.{AfterClass, AfterMethod, Test}
 
 @Test(groups = Array("UnitTest", "IntegrationTest"))
 class SplashObjectWriterTest {
@@ -30,6 +30,13 @@ class SplashObjectWriterTest {
   @AfterClass
   def afterClass(): Unit = {
     StorageFactoryHolder.getFactory.reset()
+  }
+
+  @AfterMethod
+  def afterMethod(): Unit = {
+    if (objWriter != null) {
+      objWriter.close()
+    }
   }
 
   def testCommitWithoutInitialize(): Unit = {

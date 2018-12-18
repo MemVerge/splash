@@ -15,7 +15,7 @@
  */
 package org.apache.spark.shuffle.local
 
-import java.io.{File, FileInputStream, InputStream}
+import java.io.{File, InputStream}
 
 import com.memverge.splash.ShuffleFile
 import org.apache.spark.SparkEnv
@@ -32,7 +32,7 @@ class LocalShuffleFile(path: String)
 
   private def blockId: BlockId = LocalShuffleUtil.toBlockId(path)
 
-  protected def file: File = {
+  def file: File = {
     if (new File(path).exists()) {
       new File(path)
     } else {
@@ -75,7 +75,10 @@ class LocalShuffleFile(path: String)
   override def makeInputStream(): InputStream = {
     if (!useRemote && isLocal) {
       logInfo(s"found $blockId locally,  do local read.")
-      new FileInputStream(file)
+      blockManager.getLocalBytes(blockId).map(data => {
+        logDebug(s"received local ${data.size} bytes for $blockId")
+        data.toInputStream()
+      }).orNull
     } else {
       logInfo(s"$blockId is a remote block, do remote read.")
       blockManager.getRemoteBytes(blockId)
