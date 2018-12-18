@@ -19,7 +19,6 @@ import java.lang.reflect.Constructor;
 import java.util.Collection;
 import java.util.Collections;
 import org.apache.spark.SparkConf;
-import org.apache.spark.SparkEnv;
 import org.apache.spark.shuffle.SplashOpts;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -35,31 +34,21 @@ public class StorageFactoryHolder {
     return INSTANCE.getRealFactory();
   }
 
-  private SparkConf conf;
+  private SparkConf conf = null;
 
-  public static void setSparkConf(SparkConf conf) {
-    INSTANCE.conf = conf;
-  }
-
-  private SparkConf getSparkConf() {
-    SparkConf ret;
-    try {
-      ret = SparkEnv.get().conf();
-    } catch (NullPointerException e) {
-      ret = null;
-    }
-    return ret;
+  public static void setSparkConf(SparkConf sparkConf) {
+    INSTANCE.conf = sparkConf;
+    logger.info("initialize StorageFactoryHolder with {}", sparkConf);
+    INSTANCE.factory = null;
+    logger.info("SparkConf has been updated.  reset StorageFactory to null.");
   }
 
   private StorageFactory factory = null;
 
   private StorageFactory getRealFactory() {
-    SparkConf sparkConf = getSparkConf();
-    if (factory == null || conf != sparkConf) {
+    if (factory == null) {
       synchronized (this) {
-        sparkConf = getSparkConf();
-        if (factory == null || conf != sparkConf) {
-          conf = sparkConf;
+        if (factory == null) {
           String clzName;
           if (conf != null) {
             clzName = conf.get(SplashOpts.storageFactoryName());

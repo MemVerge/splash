@@ -23,10 +23,10 @@ package org.apache.spark.shuffle
 import java.util.concurrent.ConcurrentHashMap
 
 import com.memverge.splash.StorageFactoryHolder
+import org.apache.spark._
 import org.apache.spark.internal.Logging
 import org.apache.spark.shuffle.sort.SortShuffleManager.MAX_SHUFFLE_OUTPUT_PARTITIONS_FOR_SERIALIZED_MODE
 import org.apache.spark.shuffle.sort.SplashUnsafeShuffleWriter
-import org.apache.spark.{ShuffleDependency, SparkConf, TaskContext}
 
 class SplashShuffleManager(conf: SparkConf) extends ShuffleManager with Logging {
   StorageFactoryHolder.setSparkConf(conf)
@@ -34,12 +34,12 @@ class SplashShuffleManager(conf: SparkConf) extends ShuffleManager with Logging 
 
   StorageFactoryHolder.onApplicationStart()
 
-  /** @inheritdoc*/
+  /** @inheritdoc */
   override lazy val shuffleBlockResolver = new SplashShuffleBlockResolver(
     conf.getAppId,
     conf.get(SplashOpts.shuffleFileBufferKB).toInt)
 
-  /** @inheritdoc*/
+  /** @inheritdoc */
   override def registerShuffle[K, V, C](
       shuffleId: Int,
       numMaps: Int,
@@ -59,7 +59,7 @@ class SplashShuffleManager(conf: SparkConf) extends ShuffleManager with Logging 
     }
   }
 
-  /** @inheritdoc*/
+  /** @inheritdoc */
   override def getWriter[K, V](
       handle: ShuffleHandle,
       mapId: Int,
@@ -90,7 +90,7 @@ class SplashShuffleManager(conf: SparkConf) extends ShuffleManager with Logging 
     }
   }
 
-  /** @inheritdoc*/
+  /** @inheritdoc */
   override def getReader[K, C](
       handle: ShuffleHandle,
       startPartition: Int,
@@ -104,11 +104,11 @@ class SplashShuffleManager(conf: SparkConf) extends ShuffleManager with Logging 
       context)
   }
 
-  /** @inheritdoc*/
+  /** @inheritdoc */
   override def unregisterShuffle(shuffleId: Int): Boolean = {
     logInfo(s"unregister shuffle $shuffleId of app ${conf.getAppId}")
     Option(numMapsForShuffle.remove(shuffleId)).foreach { numMaps =>
-      if (conf.get(SplashOpts.clearShuffleOutput)) {
+      if (isDriver && conf.get(SplashOpts.clearShuffleOutput)) {
         logInfo(s"remove shuffle $shuffleId data with $numMaps mappers.")
         (0 until numMaps).foreach { mapId =>
           shuffleBlockResolver.removeDataByMap(shuffleId, mapId)
@@ -118,13 +118,19 @@ class SplashShuffleManager(conf: SparkConf) extends ShuffleManager with Logging 
     true
   }
 
-  /** @inheritdoc*/
+  /** @inheritdoc */
   override def stop(): Unit = {
     StorageFactoryHolder.onApplicationEnd()
-    if (conf.get(SplashOpts.clearShuffleOutput)) {
+    if (isDriver && conf.get(SplashOpts.clearShuffleOutput)) {
       shuffleBlockResolver.cleanup()
     }
     shuffleBlockResolver.stop()
+  }
+
+  private def isDriver = {
+    val executorId = SparkEnv.get.executorId
+    executorId == SparkContext.DRIVER_IDENTIFIER ||
+        executorId == SparkContext.LEGACY_DRIVER_IDENTIFIER
   }
 
   private def useSerializedShuffle(dependency: ShuffleDependency[_, _, _]): Boolean = {
