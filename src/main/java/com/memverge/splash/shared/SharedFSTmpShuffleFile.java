@@ -45,14 +45,13 @@ public class SharedFSTmpShuffleFile extends SharedFSShuffleFile implements
     super(pathname);
   }
 
-  static SharedFSTmpShuffleFile make() throws IOException {
+  static SharedFSTmpShuffleFile make() {
     UUID uuid = UUID.randomUUID();
     String tmpPath = folder.getTmpPath();
     String filename = String.format("%s%s", TMP_FILE_PREFIX, uuid.toString());
     String fullPath = Paths.get(tmpPath, filename).toString();
 
     SharedFSTmpShuffleFile ret = new SharedFSTmpShuffleFile(fullPath);
-    ret.create();
     ret.uuid = uuid;
     return ret;
   }
@@ -81,7 +80,7 @@ public class SharedFSTmpShuffleFile extends SharedFSShuffleFile implements
     }
     boolean created = getFile().createNewFile();
     if (!created) {
-      log.warn("file {} already exists.", getId());
+      throw new IOException(String.format("file %s already exists.", getId()));
     } else {
       log.debug("file {} created.", getId());
     }
@@ -118,7 +117,7 @@ public class SharedFSTmpShuffleFile extends SharedFSShuffleFile implements
     if (commitTarget == null) {
       throw new IOException("No commit target.");
     } else if (!exists()) {
-      throw new IOException("Tmp file already committed or recalled.");
+      create();
     }
     if (commitTarget.exists()) {
       log.warn("commit target already exists, remove '{}'.",
@@ -145,23 +144,16 @@ public class SharedFSTmpShuffleFile extends SharedFSShuffleFile implements
   }
 
   @Override
-  public OutputStream makeOutputStream(boolean append, boolean create) {
-    if (!exists()) {
-      if (create) {
-        try {
-          create();
-        } catch (IOException e) {
-          String msg = String.format("Create file %s failed.", getId());
-          throw new IllegalArgumentException(msg, e);
-        }
-      } else {
-        String msg = String.format("%s not found.", getId());
-        throw new IllegalArgumentException(msg);
-      }
+  public OutputStream makeOutputStream() {
+    try {
+      create();
+    } catch (IOException e) {
+      String msg = String.format("Create file %s failed.", getId());
+      throw new IllegalArgumentException(msg, e);
     }
     OutputStream ret;
     try {
-      ret = new FileOutputStream(file, append);
+      ret = new FileOutputStream(file, false);
       log.debug("create output stream for {}.", getId());
     } catch (FileNotFoundException e) {
       String msg = String.format("File %s not found?", getId());

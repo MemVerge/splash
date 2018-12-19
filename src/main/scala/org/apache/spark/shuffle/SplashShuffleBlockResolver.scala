@@ -152,7 +152,7 @@ private[spark] class SplashShuffleBlockResolver(
     SplashUtils.withResources(
       new DataOutputStream(
         new BufferedOutputStream(
-          indexTmp.makeOutputStream(true)))) { os =>
+          indexTmp.makeOutputStream()))) { os =>
       os.writeLong(offset)
       for (length <- lengths) {
         offset += length
@@ -228,7 +228,7 @@ private[spark] class SplashShuffleBlockResolver(
   def writeData(dataFile: TmpShuffleFile, data: Array[Byte]): Unit = {
     SplashUtils.withResources(
       new BufferedOutputStream(
-        dataFile.makeOutputStream(true))) {
+        dataFile.makeOutputStream())) {
       os => os.write(data)
     }
   }
@@ -237,7 +237,7 @@ private[spark] class SplashShuffleBlockResolver(
     SplashUtils.withResources(
       new DataOutputStream(
         new BufferedOutputStream(
-          indexFile.makeOutputStream(true)))) { out =>
+          indexFile.makeOutputStream()))) { out =>
       val last = indices.foldLeft(0L) { (acc, curr) =>
         out.writeLong(acc)
         acc + curr

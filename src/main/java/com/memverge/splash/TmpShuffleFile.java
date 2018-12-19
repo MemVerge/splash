@@ -42,20 +42,12 @@ public interface TmpShuffleFile extends ShuffleFile {
 
   UUID uuid();
 
-  default OutputStream makeOutputStream() {
-    return makeOutputStream(false);
-  }
-
-  default OutputStream makeOutputStream(boolean create) {
-    return makeOutputStream(false, create);
-  }
-
-  OutputStream makeOutputStream(boolean append, boolean create);
+  OutputStream makeOutputStream();
 
   default List<Long> merge(Collection<? extends ShuffleFile> srcFiles)
       throws IOException {
     final Logger log = LoggerFactory.getLogger(TmpShuffleFile.class);
-    final OutputStream out = makeOutputStream(true);
+    final OutputStream out = makeOutputStream();
     log.info("merge {} files into {}.", srcFiles.size(), getId());
     final List<Long> lengths = srcFiles.stream().map(file -> {
       Long copied = null;

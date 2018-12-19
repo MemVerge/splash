@@ -218,8 +218,7 @@ private[spark] class SplashUnsafeShuffleWriter[K, V](
     val partitionLengths = new Array[Long](numPartitions)
 
     val mergedOs = new CountingOutputStream(
-      new BufferedOutputStream(
-        tmpData.makeOutputStream(true, true), fileBufferSize))
+      new BufferedOutputStream(tmpData.makeOutputStream(), fileBufferSize))
 
     var threwException = true
     var spillIss: Seq[InputStream] = Seq.empty
