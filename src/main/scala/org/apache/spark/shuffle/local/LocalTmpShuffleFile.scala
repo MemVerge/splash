@@ -46,17 +46,11 @@ class LocalTmpShuffleFile extends TmpShuffleFile with Logging {
 
   private def setUuid(id: UUID): Unit = _uuid = id
 
-  override def makeOutputStream(append: Boolean, createNew: Boolean): OutputStream = {
-    if (!exists()) {
-      if (createNew) {
-        create()
-      } else {
-        throw new IllegalArgumentException(s"$getId not found.")
-      }
-    }
+  override def makeOutputStream(): OutputStream = {
     try {
+      create()
       logDebug(s"create output stream for $getId")
-      new FileOutputStream(file, append)
+      new FileOutputStream(file, false)
     } catch {
       case e: FileNotFoundException =>
         throw new IllegalArgumentException(s"Create OS failed for $getId.", e)
@@ -82,7 +76,7 @@ class LocalTmpShuffleFile extends TmpShuffleFile with Logging {
     if (commitTarget == null) {
       throw new IOException("No commit target.")
     } else if (!exists) {
-      throw new IOException("Tmp file already committed or recalled.")
+      create()
     }
     if (commitTarget.exists()) {
       logWarning(s"commit target already exists, remove '${commitTarget.getId}'.")
@@ -113,8 +107,8 @@ class LocalTmpShuffleFile extends TmpShuffleFile with Logging {
       parent.mkdirs()
     }
     logDebug(s"create file ${file.getAbsolutePath}")
-    if (file.createNewFile()) {
-      logWarning(s"file $getId already exists.")
+    if (!file.createNewFile()) {
+      throw new IOException(s"file $getId already exists.")
     } else {
       logDebug(s"file $getId created")
     }
@@ -153,7 +147,6 @@ private[spark] object LocalTmpShuffleFile {
   def make(): LocalTmpShuffleFile = {
     val ret = new LocalTmpShuffleFile()
     ret.setUuid(UUID.randomUUID())
-    ret.create()
     ret
   }
 

@@ -17,6 +17,7 @@ package com.memverge.splash;
 
 import java.io.IOException;
 import java.util.Collection;
+import org.apache.spark.SparkConf;
 
 public interface StorageFactory {
 
@@ -36,6 +37,9 @@ public interface StorageFactory {
   Collection<ShuffleListener> getListeners();
 
   // metadata
+  default void setConf(SparkConf conf) {
+  }
+
   String getShuffleFolder(String appId);
 
   default void cleanShuffle(String appId) throws IOException {

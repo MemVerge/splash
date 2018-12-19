@@ -85,6 +85,7 @@ public class StorageFactoryHolder {
       Class<?> clazz = Class.forName(clzName);
       Constructor<?> constructor = clazz.getConstructor();
       ret = (StorageFactory) constructor.newInstance();
+      ret.setConf(conf);
     } catch (ReflectiveOperationException e) {
       final String msg = String.format(
           "cannot use %s as a storage factory.",
