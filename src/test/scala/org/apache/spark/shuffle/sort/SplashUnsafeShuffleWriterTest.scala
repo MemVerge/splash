@@ -35,21 +35,21 @@ import scala.collection.mutable.ArrayBuffer
 class SplashUnsafeShuffleWriterTest {
   private val appId = "test-shuffle-unsafe-writer-app"
   private var sc: SparkContext = _
-  private val resolver = new SplashShuffleBlockResolver(appId)
+  private lazy val resolver = new SplashShuffleBlockResolver(appId)
   private val reducerNum = 4
   private val hashPartitioner = new HashPartitioner(reducerNum)
   private val mapId = 1
   private var shuffleId = 0
-  private val storageFactory = StorageFactoryHolder.getFactory
+  private lazy val storageFactory = StorageFactoryHolder.getFactory
 
   private var taskContext: TaskContext = _
   private var serializer: Serializer = _
 
   @BeforeClass
   def beforeClass(): Unit = {
-    storageFactory.reset()
     sc = TestUtil.newSparkContext(TestUtil.newSparkConf()
         .set("spark.serializer", classOf[KryoSerializer].getName))
+    storageFactory.reset()
   }
 
   @AfterClass

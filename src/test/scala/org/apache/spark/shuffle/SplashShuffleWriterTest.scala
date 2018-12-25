@@ -32,7 +32,7 @@ class SplashShuffleWriterTest {
   private val resolver = new SplashShuffleBlockResolver(appId)
   private val reducerNum = 7
   private val mapId = 1
-  private val storageFactory = StorageFactoryHolder.getFactory
+  private lazy val storageFactory = StorageFactoryHolder.getFactory
 
   private var sc: SparkContext = _
   private var shuffleId = 0
