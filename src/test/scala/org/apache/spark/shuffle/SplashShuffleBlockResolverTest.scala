@@ -143,4 +143,19 @@ class SplashShuffleBlockResolverTest {
     val actual = resolver.checkIndexAndDataFile(shuffleId, mapId)
     assertThat(actual) isNull()
   }
+
+  def testCommitEmptyShuffleIndex(): Unit = {
+    val lengths = Array[Long]()
+    val mapId = 6
+    val dataTmp = resolver.getDataTmpFile(shuffleId, mapId)
+
+    resolver.writeIndexFileAndCommit(shuffleId, mapId, lengths, dataTmp)
+    val dataFile = resolver.getDataFile(shuffleId, mapId)
+    val indexFile = resolver.getIndexFile(shuffleId, mapId)
+    assertThat(dataFile.exists()) isTrue()
+    assertThat(dataFile.getSize) isEqualTo 0
+    assertThat(dataTmp.exists()) isFalse()
+    assertThat(indexFile.exists()) isTrue()
+    assertThat(indexFile.getSize) isEqualTo 0
+  }
 }

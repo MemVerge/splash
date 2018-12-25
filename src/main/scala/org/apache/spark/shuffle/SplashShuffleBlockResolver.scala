@@ -149,14 +149,25 @@ private[spark] class SplashShuffleBlockResolver(
     val indexTmp = storageFactory.makeIndexFile(indexFilename(shuffleId, mapId))
     var offset = 0L
 
-    SplashUtils.withResources(
-      new DataOutputStream(
-        new BufferedOutputStream(
-          indexTmp.makeOutputStream()))) { os =>
-      os.writeLong(offset)
-      for (length <- lengths) {
-        offset += length
+    if (lengths.length == 0 || lengths.sum == 0) {
+      // even if there is nothing to write,
+      // we need to make sure the tmp files are created.
+      if (!indexTmp.exists()) {
+        indexTmp.create()
+      }
+      if (!dataTmp.exists()) {
+        dataTmp.create()
+      }
+    } else {
+      SplashUtils.withResources(
+        new DataOutputStream(
+          new BufferedOutputStream(
+            indexTmp.makeOutputStream()))) { os =>
         os.writeLong(offset)
+        for (length <- lengths) {
+          offset += length
+          os.writeLong(offset)
+        }
       }
     }
 
