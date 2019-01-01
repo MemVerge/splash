@@ -63,11 +63,11 @@ private[spark] class SplashShuffleBlockResolver(
   }
 
   private def dataFilename(shuffleId: ShuffleId, mapId: ShuffleId) = {
-    new File(s"$shuffleFolder",s"shuffle_${shuffleId}_${mapId}_0.data").toString
+    new File(s"$shuffleFolder", s"shuffle_${shuffleId}_${mapId}_0.data").toString
   }
 
   private def indexFilename(shuffleId: ShuffleId, mapId: ShuffleId) = {
-    new File(s"$shuffleFolder",s"shuffle_${shuffleId}_${mapId}_0.index").toString
+    new File(s"$shuffleFolder", s"shuffle_${shuffleId}_${mapId}_0.index").toString
   }
 
   def getDataFile(shuffleBlockId: ShuffleBlockId): ShuffleFile = {
@@ -100,6 +100,8 @@ private[spark] class SplashShuffleBlockResolver(
         } { indexDataIs =>
           val offset = indexDataIs.readLong()
           val nextOffset = indexDataIs.readLong()
+          logDebug(s"got partition of $blockId from $offset to $nextOffset " +
+              s"from ${indexFile.getId} size ${indexFile.getSize}")
           val dataIs = new LimitedInputStream(dataFile.makeInputStream(), nextOffset)
           dataIs.skip(offset)
 
@@ -121,6 +123,8 @@ private[spark] class SplashShuffleBlockResolver(
   }
 
   private def logPartitionMd5(dataFile: ShuffleFile, offset: Long, nextOffset: Long) = {
+    logDebug(s"read partition from $offset to $nextOffset " +
+        s"in ${dataFile.getId} size ${dataFile.getSize}.")
     SplashUtils.withResources {
       val is = new LimitedInputStream(dataFile.makeInputStream(), nextOffset)
       is.skip(offset)
