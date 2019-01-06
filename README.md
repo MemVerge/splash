@@ -8,7 +8,7 @@ Supply a fast, flexible and reliable shuffle manager that allows user to plug in
 ## License
 [Apache License Version 2.0](LICENSE)
 
-## Project Motivation
+## Motivation
 
 *	Local shuffle has limitations on reliability and performance. Node or even just local storage failures may seriously impact the performance of the whole cluster.
 *	The performance of local hard disk IO is affecting the overall performance when there is heavy shuffle.
