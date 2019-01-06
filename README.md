@@ -3,20 +3,16 @@
 A shuffle manager for Spark that supports different storage plugin.
 
 ## Vision
-Supply a fast, flexible and reliable shuffle manager for big data frameworks 
-that allows different storage to plugin. 
+Supply a fast, flexible and reliable shuffle manager that allows user to plug in his/her favoriate backend storage and network frameworks for holding and exchanging shuffle data. 
 
 ## License
 [Apache License Version 2.0](LICENSE)
 
 ## Project Motivation
 
-*	Local shuffle has limitations on reliability and performance. Loose of a 
-  single node or local storage may seriously impact the performance of the 
-  whole cluster.
-*	The performance of local disk IO is affecting the overall performance of the 
-  shuffle.
-*	There is no easy/general solution to plugin external storage to existing 
+*	Local shuffle has limitations on reliability and performance. Node or even just local storage failures may seriously impact the performance of the whole cluster.
+*	The performance of local hard disk IO is affecting the overall performance when there is heavy shuffle.
+*	There is no easy/general solution currently available to plug external storage into existing 
   shuffle service.
 
 ## Deployment
@@ -24,7 +20,7 @@ that allows different storage to plugin.
 * Include the jar file in your spark default configuration or task 
   configuration.
 * Include the plugin jar in the same way.
-* Switch to the Splash shuffle manager with following option:
+* Switch to the Splash shuffle manager by adding the following option:
 ```
 spark.shuffle.manager org.apache.spark.shuffle.sort.SplashShuffleManager
 ``` 
@@ -82,8 +78,10 @@ storage plugins for the shuffle manager.  And different storage could be used
 based on the usage of the file.  For detail, please check the 
 [Plugin API](doc/Plugin_API.md) document.
 
-The Splash project is released with 2 default plugins:
-* plugin for shared file system like NFS, use following storage factory:
+The Splash project is currently released with two default plugins:
+* the plugin for shared file system such as NFS:
   `com.memverge.splash.shared.SharedFSFactory`
 * plugin for Spark block manager with local disk storage:
   `org.apache.spark.shuffle.local.LocalStorageFactory`
+
+These plugins also serve as examples for developers to develop his/her own storage plugins.
