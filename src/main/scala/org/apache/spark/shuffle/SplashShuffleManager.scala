@@ -1,5 +1,5 @@
 /*
- * Modifications copyright (C) 2018 MemVerge Corp
+ * Modifications copyright (C) 2018 MemVerge Inc.
  *
  * Replace the original shuffle class with Splash version classes.
  *
@@ -34,12 +34,18 @@ class SplashShuffleManager(conf: SparkConf) extends ShuffleManager with Logging 
 
   StorageFactoryHolder.onApplicationStart()
 
-  /** @inheritdoc */
+  /**
+   * Return a resolver capable of retrieving shuffle block data based on block
+   * coordinates.
+   */
   override lazy val shuffleBlockResolver = new SplashShuffleBlockResolver(
     conf.getAppId,
     conf.get(SplashOpts.shuffleFileBufferKB).toInt)
 
-  /** @inheritdoc */
+  /**
+   * Register a shuffle with the manager and obtain a handle for it to pass to
+   * tasks.
+   */
   override def registerShuffle[K, V, C](
       shuffleId: Int,
       numMaps: Int,
@@ -59,7 +65,7 @@ class SplashShuffleManager(conf: SparkConf) extends ShuffleManager with Logging 
     }
   }
 
-  /** @inheritdoc */
+  /** Get a writer for a given partition. Called on executors by map tasks. */
   override def getWriter[K, V](
       handle: ShuffleHandle,
       mapId: Int,
@@ -90,7 +96,10 @@ class SplashShuffleManager(conf: SparkConf) extends ShuffleManager with Logging 
     }
   }
 
-  /** @inheritdoc */
+  /**
+   * Get a reader for a range of reduce partitions (startPartition to endPartition-1, inclusive).
+   * Called on executors by reduce tasks.
+   */
   override def getReader[K, C](
       handle: ShuffleHandle,
       startPartition: Int,
@@ -104,7 +113,11 @@ class SplashShuffleManager(conf: SparkConf) extends ShuffleManager with Logging 
       context)
   }
 
-  /** @inheritdoc */
+  /**
+   * Remove a shuffle's metadata from the ShuffleManager.
+   *
+   * @return true if the metadata removed successfully, otherwise false.
+   */
   override def unregisterShuffle(shuffleId: Int): Boolean = {
     logInfo(s"unregister shuffle $shuffleId of app ${conf.getAppId}")
     Option(numMapsForShuffle.remove(shuffleId)).foreach { numMaps =>
@@ -118,7 +131,7 @@ class SplashShuffleManager(conf: SparkConf) extends ShuffleManager with Logging 
     true
   }
 
-  /** @inheritdoc */
+  /** Shut down this ShuffleManager. */
   override def stop(): Unit = {
     StorageFactoryHolder.onApplicationEnd()
     if (isDriver && conf.get(SplashOpts.clearShuffleOutput)) {

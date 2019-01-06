@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2018 MemVerge Corp
+ * Copyright (C) 2018 MemVerge Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -49,11 +49,11 @@ class LocalTmpShuffleFile extends TmpShuffleFile with Logging {
   override def makeOutputStream(): OutputStream = {
     try {
       create()
-      logDebug(s"create output stream for $getId")
+      logDebug(s"create output stream for $getPath")
       new FileOutputStream(file, false)
     } catch {
       case e: FileNotFoundException =>
-        throw new IllegalArgumentException(s"Create OS failed for $getId.", e)
+        throw new IllegalArgumentException(s"Create OS failed for $getPath.", e)
     }
   }
 
@@ -68,7 +68,7 @@ class LocalTmpShuffleFile extends TmpShuffleFile with Logging {
       }
     }
 
-    logDebug(s"rename $getId to $tgtId.")
+    logDebug(s"rename $getPath to $tgtId.")
     LocalShuffleUtil.putBlock(file, tgtId)
   }
 
@@ -79,21 +79,21 @@ class LocalTmpShuffleFile extends TmpShuffleFile with Logging {
       create()
     }
     if (commitTarget.exists()) {
-      logWarning(s"commit target already exists, remove '${commitTarget.getId}'.")
+      logWarning(s"commit target already exists, remove '${commitTarget.getPath}'.")
       commitTarget.file.delete()
     }
-    logDebug(s"commit tmp file $getId to target file ${getCommitTarget.getId}.")
+    logDebug(s"commit tmp file $getPath to target file ${getCommitTarget.getPath}.")
 
-    rename(commitTarget.getId)
+    rename(commitTarget.getPath)
     commitTarget
   }
 
   override def recall(): Unit = {
     val commitTarget = getCommitTarget
     if (commitTarget != null) {
-      logInfo(s"recall tmp file $getId of target file ${commitTarget.getId}.")
+      logInfo(s"recall tmp file $getPath of target file ${commitTarget.getPath}.")
     } else {
-      logInfo(s"recall tmp file $getId without target file.")
+      logInfo(s"recall tmp file $getPath without target file.")
     }
     delete()
   }
@@ -108,9 +108,9 @@ class LocalTmpShuffleFile extends TmpShuffleFile with Logging {
     }
     logDebug(s"create file ${file.getAbsolutePath}")
     if (!file.createNewFile()) {
-      throw new IOException(s"file $getId already exists.")
+      throw new IOException(s"file $getPath already exists.")
     } else {
-      logDebug(s"file $getId created")
+      logDebug(s"file $getPath created")
     }
     this
   }
@@ -121,15 +121,15 @@ class LocalTmpShuffleFile extends TmpShuffleFile with Logging {
 
   override def exists(): Boolean = file.exists()
 
-  override def getId: String = file.getAbsolutePath
+  override def getPath: String = file.getAbsolutePath
 
   override def makeInputStream(): InputStream = {
     try {
-      log.debug("create input stream for {}.", getId)
+      log.debug("create input stream for {}.", getPath)
       new FileInputStream(file)
     } catch {
       case e: FileNotFoundException =>
-        throw new IllegalArgumentException(s"Create IS failed for $getId.", e)
+        throw new IllegalArgumentException(s"Create IS failed for $getPath.", e)
     }
   }
 }

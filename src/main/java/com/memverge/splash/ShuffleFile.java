@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2018 MemVerge Corp
+ * Copyright (C) 2018 MemVerge Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,7 +17,6 @@ package com.memverge.splash;
 
 import java.io.IOException;
 import java.io.InputStream;
-import java.io.OutputStream;
 
 public interface ShuffleFile {
 
@@ -27,7 +26,7 @@ public interface ShuffleFile {
 
   boolean exists() throws IOException;
 
-  String getId();
+  String getPath();
 
   InputStream makeInputStream();
 }

@@ -1,5 +1,5 @@
 /*
- * Modifications copyright (C) 2018 MemVerge Corp
+ * Modifications copyright (C) 2018 MemVerge Inc.
  *
  * Replace local file IO with Splash IO interface.
  *
@@ -138,7 +138,7 @@ private[spark] class SplashBypassMergeSortShuffleWriter[K, V](
             partitionWriters.foreach(writer => {
               val file = writer.revertPartialWritesAndClose()
               if (file.exists() && !file.delete()) {
-                logWarning(s"Error while deleting file ${file.getId}")
+                logWarning(s"Error while deleting file ${file.getPath}")
               }
             })
           } finally {

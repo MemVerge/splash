@@ -1,5 +1,5 @@
 /*
- * Modifications copyright (C) 2018 MemVerge Corp
+ * Modifications copyright (C) 2018 MemVerge Inc.
  *
  * Use TmpShuffleFile interface instead of raw file.
  *
@@ -31,8 +31,8 @@ case class SpilledFile(
     serializerBatchSizes: Array[Long] = Array[Long](),
     elementsPerPartition: Array[Long] = Array[Long]()) extends Logging {
   if (success) {
-    logInfo(s"Spill success: ${file.getId}, size: ${file.getSize}")
+    logInfo(s"Spill success: ${file.getPath}, size: ${file.getSize}")
   } else {
-    logInfo(s"Spill failed: ${file.getId}")
+    logInfo(s"Spill failed: ${file.getPath}")
   }
 }

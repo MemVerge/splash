@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2018 MemVerge Corp
+ * Copyright (C) 2018 MemVerge Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -61,7 +61,7 @@ class LocalStorageFactory extends StorageFactory with Logging {
   }
 
   override def getTmpFileCount: Int = {
-    val folder = new File(LocalShuffleUtil.getTmpFolder())
+    val folder = new File(LocalShuffleUtil.getTmpFolder)
     FileUtils.listFiles(folder, null, true)
         .iterator.asScala
         .count(file => file.getName.contains("tmp-"))
@@ -74,7 +74,7 @@ class LocalStorageFactory extends StorageFactory with Logging {
       logInfo(s"Reset storage, remove $blockManagerFolder.")
     }
 
-    val tmpFolder = LocalShuffleUtil.getTmpFolder()
+    val tmpFolder = LocalShuffleUtil.getTmpFolder
     FileUtils.deleteDirectory(new File(tmpFolder))
     logInfo(s"Reset storage, remove $tmpFolder.")
   }

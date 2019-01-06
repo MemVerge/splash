@@ -1,5 +1,5 @@
 /*
- * Modifications copyright (C) 2018 MemVerge Corp
+ * Modifications copyright (C) 2018 MemVerge Inc.
  *
  * Extract some inner classes to package visible utility classes.
  *
@@ -101,7 +101,7 @@ class SplashSpillableIterator[T](var upstream: Iterator[T],
         val shuffleTmpFile = spilledFile.file
         nextUpstream = getNextUpstream(spilledFile)
         logInfo(s"spilling in-memory " +
-            s"data structure to storage ${shuffleTmpFile.getId} " +
+            s"data structure to storage ${shuffleTmpFile.getPath} " +
             s"size ${shuffleTmpFile.getSize}.")
         spilledFileOpt = Some(spilledFile)
         spilledFileOpt

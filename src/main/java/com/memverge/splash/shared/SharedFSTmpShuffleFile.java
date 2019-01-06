@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2018 MemVerge Corp
+ * Copyright (C) 2018 MemVerge Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -80,9 +80,9 @@ public class SharedFSTmpShuffleFile extends SharedFSShuffleFile implements
     }
     boolean created = getFile().createNewFile();
     if (!created) {
-      throw new IOException(String.format("file %s already exists.", getId()));
+      throw new IOException(String.format("file %s already exists.", getPath()));
     } else {
-      log.debug("file {} created.", getId());
+      log.debug("file {} created.", getPath());
     }
     return this;
   }
@@ -121,13 +121,13 @@ public class SharedFSTmpShuffleFile extends SharedFSShuffleFile implements
     }
     if (commitTarget.exists()) {
       log.warn("commit target already exists, remove '{}'.",
-          commitTarget.getId());
+          commitTarget.getPath());
       commitTarget.delete();
     }
     log.debug("commit tmp file {} to target file {}.",
-        getId(), getCommitTarget().getId());
+        getPath(), getCommitTarget().getPath());
 
-    rename(commitTarget.getId());
+    rename(commitTarget.getPath());
     return commitTarget;
   }
 
@@ -136,9 +136,9 @@ public class SharedFSTmpShuffleFile extends SharedFSShuffleFile implements
     SharedFSShuffleFile commitTarget = getCommitTarget();
     if (commitTarget != null) {
       log.info("recall tmp file {} of target file {}.",
-          getId(), commitTarget.getId());
+          getPath(), commitTarget.getPath());
     } else {
-      log.info("recall tmp file {} without target file.", getId());
+      log.info("recall tmp file {} without target file.", getPath());
     }
     delete();
   }
@@ -148,15 +148,15 @@ public class SharedFSTmpShuffleFile extends SharedFSShuffleFile implements
     try {
       create();
     } catch (IOException e) {
-      String msg = String.format("Create file %s failed.", getId());
+      String msg = String.format("Create file %s failed.", getPath());
       throw new IllegalArgumentException(msg, e);
     }
     OutputStream ret;
     try {
       ret = new FileOutputStream(file, false);
-      log.debug("create output stream for {}.", getId());
+      log.debug("create output stream for {}.", getPath());
     } catch (FileNotFoundException e) {
-      String msg = String.format("File %s not found?", getId());
+      String msg = String.format("File %s not found?", getPath());
       throw new IllegalArgumentException(msg, e);
     }
     return ret;

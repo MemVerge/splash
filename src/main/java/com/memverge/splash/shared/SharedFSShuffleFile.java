@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2018 MemVerge Corp
+ * Copyright (C) 2018 MemVerge Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,10 +19,8 @@ import com.memverge.splash.ShuffleFile;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileNotFoundException;
-import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
-import java.io.OutputStream;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -53,7 +51,7 @@ public class SharedFSShuffleFile implements ShuffleFile {
   }
 
   @Override
-  public String getId() {
+  public String getPath() {
     return file.getAbsolutePath();
   }
 
@@ -62,9 +60,9 @@ public class SharedFSShuffleFile implements ShuffleFile {
     InputStream ret;
     try {
       ret = new FileInputStream(file);
-      log.debug("create input stream for {}.", getId());
+      log.debug("create input stream for {}.", getPath());
     } catch (FileNotFoundException e) {
-      String msg = String.format("Create input stream failed for %s.", getId());
+      String msg = String.format("Create input stream failed for %s.", getPath());
       throw new IllegalArgumentException(msg, e);
     }
     return ret;
@@ -78,7 +76,7 @@ public class SharedFSShuffleFile implements ShuffleFile {
     File tgtFile = new File(tgtId);
     boolean success = file.renameTo(tgtFile);
     if (success) {
-      log.debug("rename {} to {}.", getId(), tgtId);
+      log.debug("rename {} to {}.", getPath(), tgtId);
     } else {
       String msg = String.format("rename file to %s failed.", tgtId);
       throw new IOException(msg);

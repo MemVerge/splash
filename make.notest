@@ -1,2 +1,2 @@
 #!/bin/bash
-mvn -DskipTests=true install
+mvn install -Dmaven.test.skip=true -DskipTests

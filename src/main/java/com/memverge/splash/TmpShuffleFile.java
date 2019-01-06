@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2018 MemVerge Corp
+ * Copyright (C) 2018 MemVerge Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -48,19 +48,19 @@ public interface TmpShuffleFile extends ShuffleFile {
       throws IOException {
     final Logger log = LoggerFactory.getLogger(TmpShuffleFile.class);
     final OutputStream out = makeOutputStream();
-    log.info("merge {} files into {}.", srcFiles.size(), getId());
+    log.info("merge {} files into {}.", srcFiles.size(), getPath());
     final List<Long> lengths = srcFiles.stream().map(file -> {
       Long copied = null;
       try (final InputStream in = file.makeInputStream()) {
         copied = (long) IOUtils.copy(in, out);
       } catch (IOException e) {
         log.error("merge input from {} to {} failed.",
-            file.getId(), getId(), e);
+            file.getPath(), getPath(), e);
       } finally {
         try {
           file.delete();
         } catch (IOException e) {
-          log.warn("delete {} failed.", file.getId(), e);
+          log.warn("delete {} failed.", file.getPath(), e);
         }
       }
       return copied;

@@ -1,5 +1,5 @@
 /*
- * Modifications copyright (C) 2018 MemVerge Corp
+ * Modifications copyright (C) 2018 MemVerge Inc.
  *
  * Use storage factory to create input/output streams and get file instance.
  *
@@ -94,14 +94,14 @@ private[spark] class SplashShuffleBlockResolver(
       try
         SplashUtils.withResources {
           val indexIs = indexFile.makeInputStream()
-          logDebug(s"Shuffle ${indexFile.getId}, seek ${shuffleBlockId.reduceId * 8L}")
+          logDebug(s"Shuffle ${indexFile.getPath}, seek ${shuffleBlockId.reduceId * 8L}")
           indexIs.skip(shuffleBlockId.reduceId * 8L)
           new DataInputStream(new BufferedInputStream(indexIs, 16))
         } { indexDataIs =>
           val offset = indexDataIs.readLong()
           val nextOffset = indexDataIs.readLong()
           logDebug(s"got partition of $blockId from $offset to $nextOffset " +
-              s"from ${indexFile.getId} size ${indexFile.getSize}")
+              s"from ${indexFile.getPath} size ${indexFile.getSize}")
           val dataIs = new LimitedInputStream(dataFile.makeInputStream(), nextOffset)
           dataIs.skip(offset)
 
@@ -124,7 +124,7 @@ private[spark] class SplashShuffleBlockResolver(
 
   private def logPartitionMd5(dataFile: ShuffleFile, offset: Long, nextOffset: Long) = {
     logDebug(s"read partition from $offset to $nextOffset " +
-        s"in ${dataFile.getId} size ${dataFile.getSize}.")
+        s"in ${dataFile.getPath} size ${dataFile.getSize}.")
     SplashUtils.withResources {
       val is = new LimitedInputStream(dataFile.makeInputStream(), nextOffset)
       is.skip(offset)
@@ -135,7 +135,7 @@ private[spark] class SplashShuffleBlockResolver(
       val md: MessageDigest = MessageDigest.getInstance("MD5")
       val theDigest: Array[Byte] = md.digest(buf)
       val str = theDigest.map("%02X" format _).mkString
-      logDebug(s"md5 for ${dataFile.getId} offset $offset, length ${buf.length}: $str")
+      logDebug(s"md5 for ${dataFile.getPath} offset $offset, length ${buf.length}: $str")
       Some(is)
     }
   }
@@ -188,7 +188,7 @@ private[spark] class SplashShuffleBlockResolver(
         dataTmp.commit()
         indexFileOpt = Some(indexTmp.commit())
         logDebug(s"commit shuffle index: " +
-            s"${indexTmp.getCommitTarget.getId}, " +
+            s"${indexTmp.getCommitTarget.getPath}, " +
             s"size: ${indexTmp.getCommitTarget.getSize}")
       }
     }
