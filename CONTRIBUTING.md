@@ -1,30 +1,30 @@
 # Contributing
 
 ## How to contribute
-Contributing is welcome in this project.  We are using a light-weight process
+We greatly appreciate and welcome your contributions to Splash!  We are using a light-weight process
 for all code changes.
 
-Please file an issue describing the bug or feature you are trying to address 
-before creating a PR(pull request).  It would help the maintainer to better 
-understand the problem.
+Please file an issue describing the bug or the feature you are trying to address 
+before creating a pull request (PR).  It would help the maintainers to better 
+understand your efforts.
 
 After a PR is created, online CI will be triggered automatically.
 
 ### Development model
 Use [this branching model](https://nvie.com/posts/a-successful-git-branching-model/) 
 as reference.
-* Create an issue in github.
+* Create an issue on github.
 * Fork your own repo.
 * Create a new branch from `development` for your development.
-* Create a PR from your branch to the `development` branch
-* Make sure your PR meets the PR criteria.
+* Create a PR from your branch to the `development` branch.
+* Make sure your PR meets the criterias listed below.
 * Address the review comments.
-* Squash and merge your PR in the rebase way.
+* Squash and merge your PR via rebasing.
 
 ### PR criteria
-Please make sure your PR reaches following criteria:
+Please make sure your PR satisfies the following criteria:
 
-* Include the issue number in your PR title like this:
+* Include the issue number in your PR title using the following format:
   ```
   [SPLASH-05] Add HDFS implementation...
   ```  
