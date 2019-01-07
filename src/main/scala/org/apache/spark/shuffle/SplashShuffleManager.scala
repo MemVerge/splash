@@ -147,7 +147,7 @@ class SplashShuffleManager(conf: SparkConf) extends ShuffleManager with Logging 
   }
 
   private def useSerializedShuffle(dependency: ShuffleDependency[_, _, _]): Boolean = {
-    val optionKey = "spark.shuffle.mvfs.useBaseShuffle"
+    val optionKey = "spark.shuffle.splash.useBaseShuffle"
     val useBaseShuffle = conf.getBoolean(optionKey, defaultValue = false)
     !useBaseShuffle && canUseSerializedShuffle(dependency)
   }

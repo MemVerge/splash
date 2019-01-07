@@ -268,7 +268,7 @@
             </goals>
           </execution>
           <execution>
-            <id>jacoco-site</id>
+            <id>report</id>
             <phase>test</phase>
             <goals>
               <goal>report</goal>

@@ -1,5 +1,8 @@
 # Splash
 
+[![travis-ci](https://img.shields.io/travis/MemVerge/splash/master.svg)](https://travis-ci.org/MemVerge/splash)
+[![codecov](https://img.shields.io/codecov/c/gh/MemVerge/splash/master.svg)](https://codecov.io/gh/MemVerge/splash)
+
 A shuffle manager for Spark that supports different storage plugins.
 
 The motivation of this project is to supply a fast, flexible and reliable 
@@ -30,6 +33,7 @@ these version parameters in `pom.xml`
 * `spark.version`
 * `hadoop.version`
 * `scala.version`
+
 Check the [Build](#build) section for how to generate your customized jar.
 
 ### Spark
