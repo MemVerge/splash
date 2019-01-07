@@ -3,7 +3,7 @@
 A shuffle manager for Spark that supports different storage plugins.
 
 The motivation of this project is to supply a fast, flexible and reliable 
-shuffle manager that allows user to plug in his/her favorite backend storage 
+shuffle manager that allows the user to plug in his/her favorite backend storage 
 and network frameworks for holding and exchanging shuffle data. 
 
 In general, the current shuffle manager in Spark has some shortcomings.
@@ -14,7 +14,7 @@ In general, the current shuffle manager in Spark has some shortcomings.
   * In order to improve the shuffle read/write performance, you must upgrade 
     each server in the cluster.
   * the overall performance of the shuffle stage is affected by the performance 
-    of local disk IO when there is heavy shuffle.
+    of local disk IO when there is heavy shuffling.
 * There is no easy/general solution to plugin external storage to the shuffle 
   service.
   
@@ -25,7 +25,7 @@ We want to address these issues in this shuffle manager.
 
 ## Deployment
 By default, we support Spark 2.3.2_2.11 with Hadoop 2.7.  
-If you want to generate a build with other Spark version, you need to modify 
+If you want to generate a build with a different Spark version, you need to modify 
 these version parameters in `pom.xml` 
 * `spark.version`
 * `hadoop.version`
@@ -36,42 +36,42 @@ Check the [Build](#build) section for how to generate your customized jar.
 * You need to include the Splash jar file in your spark default configuration 
   or task configuration.  Make sure you choose the one that is aligned with your 
   Spark and Scala version.  Typically, you only need to add two configurations 
-  in your `spark-defauls.conf`
+  in your `spark-defaults.conf`
   
   ```
   spark.driver.extraClassPath /path/to/splash.jar
   spark.executor.extraClassPath /path/to/splash.jar
   ```
 * You can include the plugin jar in the same way.
-* You could configure your Spark application to use the Splash shuffle manager 
+* You can configure your Spark application to use the Splash shuffle manager 
   by adding the following option:
 ```
 spark.shuffle.manager org.apache.spark.shuffle.sort.SplashShuffleManager
 ```
-* The storage plugin is tunable at the application level.  User could specify 
+* The storage plugin is tunable at the application level.  The user can specify 
   different storage implementations for different applications.
 * Support both on-premise and cloud deployments.
 
 ## Release
-* Release number follows [Semantic Versioning 2.0.0](https://semver.org/#semantic-versioning-200)
+* Release numbering follows [Semantic Versioning 2.0.0](https://semver.org/#semantic-versioning-200)
 * Releases are available in project's release page.
 
 ## Upgrade
-Although the basic function of the project has been verified, we still feel 
-that the public API will be modified when more storage plugins are being 
-developed.  Therefore:
+Although the basic functionality of the project has been verified, we still feel 
+that the public API might be modified when more storage plugins are developed. 
+Therefore:
 * The public API may change until we reach version 1.0.0.
 
 According to the definition of semantic versioning 2.0.0, we do not promise 
 backward compatibility if the first digit in the version is changed.
 
 ## Service & Support
-* Please raise your question in the project's issue page and tagged it with 
+* Please raise your question in the project's issue page and tag it with 
   `question`.
 * Project documents are available in the `doc` folder.
 
 ## Community
-You could communicate with us in following ways:
+You can communicate with us in following ways:
 * Start a new thread in [Github issues](https://github.com/MemVerge/splash/issues), 
   recommended.
 * Request to join the WeChat group through [email](mailto://cedric.zhuang@memverge.com) 
@@ -113,16 +113,16 @@ Please check the [Contributing](CONTRIBUTING.md) document for details.
   completes.
   
 ## Plugin Development
-Splash uses plugins to support different types of storage systems.  User could 
-develop their own storage plugins for the shuffle manager.  User could use 
-different types of storage system based on the usage of the file.  For detail, 
+Splash uses plugins to support different types of storage systems.  The user can 
+develop their own storage plugins for the shuffle manager.  The user can use 
+different types of storage system based on the usage of the file.  For details, 
 please check our [design document](doc/Design.md).
 
 The Splash project is currently released with two default plugins:
-* the plugin for shared file system like NFS is implemented by:
+* the plugin for shared file systems like NFS is implemented by:
   `com.memverge.splash.shared.SharedFSFactory`
-* the plugin for Spark block manager with local disk storage is implemented by:
+* the plugin for the Spark block manager with local disk storage is implemented by:
   `org.apache.spark.shuffle.local.LocalStorageFactory`
 
-These plugins also serve as examples for developers to develop his/her own 
+These plugins also serve as examples for developers to develop their own 
 storage plugins.
