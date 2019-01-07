@@ -83,7 +83,7 @@ object TestUtil {
       .set("splash.local.internal.alwaysRemote", "false")
 
   def newBaseShuffleConf: SparkConf = newSparkConf()
-      .set("spark.shuffle.mvfs.useBaseShuffle", "true")
+      .set("spark.shuffle.splash.useBaseShuffle", "true")
 
   def newTaskContext(conf: SparkConf): TaskContext = {
     val taskMemoryManager = new TaskMemoryManager(newMemoryManager(conf), 0)
