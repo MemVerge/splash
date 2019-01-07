@@ -81,11 +81,11 @@ Maintainers can voluntarily give up their maintainer role when they want to
 step away from the project.
 
 ### Maintainers
-* [Cedric Zhuang](https://github.com/jealous), cedric.zhuang@memverge.com
-* [Sheperd Huang](https://github.com/sheperdh), sheperd.huang@memverge.com
-* [Haiyan Wang](https://github.com/wanghy73), haiyan.wang@memverge.com
-* [Yue Li](https://github.com/yuelimv), yue.li@memverge.com
-* [Jie Yu](https://github.com/jieyumv), jie.yu@memverge.com
+* [Cedric Zhuang](https://github.com/jealous)
+* [Sheperd Huang](https://github.com/sheperdh)
+* [Haiyan Wang](https://github.com/wanghy73)
+* [Yue Li](https://github.com/yuelimv)
+* [Jie Yu](https://github.com/jieyumv)
 
 ### Contributors
-* [Zeyi Qi](https://github.com/qzyse2017), zyck2018@gmail.com
+* [Zeyi Qi](https://github.com/qzyse2017)
