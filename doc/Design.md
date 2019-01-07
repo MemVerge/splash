@@ -39,7 +39,7 @@ Splash shuffle manager introduces some modifications to these handlers:
 
 ## Architecture
 
-In vanilla Spark, each executor directly interacts with to its local disks and 
+In vanilla Spark, each executor directly interacts with its local disks and 
 network.  
 
 Splash shuffle manager, instead implements two layers of abstraction between 
@@ -51,7 +51,7 @@ executors and the actual storage and network.
 
 There are several advantages of this architecture:
 * The shuffle manager becomes stateless which makes executors stateless.
-* Stateless compute node provides the flexibility to add and remove node without 
+* Stateless compute node provides the flexibility to add and remove nodes without 
   re-computing the whole shuffle
 * The commit operation of the shuffle file is atomic.  Un-committed files can 
   be cleaned up easily.
@@ -63,7 +63,7 @@ There are several advantages of this architecture:
   
   For instance, user can have a separate dedicated storage cluster for 
   storing the shuffle data.
-* Through the implementation of the storage plugin, the user can have a separated 
+* Through the implementation of the storage plugin, the user can have a separate 
   storage cluster for shuffle data, which can provide large capacity and high 
   reliability.
 * Compared to external shuffle service, Splash shuffle manager lives in the 
@@ -81,7 +81,7 @@ More specifically:
 * `ShuffleWriter` is responsible for writing the shuffle data in map stage.  It 
   utilizes `SplashSorter` or `SplashUnsafeSorter` to hold the data in memory.  
   If there is not enough memory, it spills the data to `TmpShuffleFile`.
-*  After all data are processed, `SplashSorter` and `SplashUnsafeSorter` merges
+*  After all data are processed, `SplashSorter` and `SplashUnsafeSorter` merge
   the data in both memory and spilled files, creating the shuffle outputs and 
   persisting them into the shuffle data storage system.
 * `ShuffleReader` is used in the reducer stage to collect data from the shuffle

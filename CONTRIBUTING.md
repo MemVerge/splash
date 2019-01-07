@@ -19,7 +19,7 @@ Here is the development model we recommend.
 We use [this branching model](https://nvie.com/posts/a-successful-git-branching-model/) 
 as a reference.  Each step is described below:
 * Create an issue on Github.
-* Wait for the issue is confirmed and assigned to you.
+* Wait for the issue to be confirmed and assigned to you.
 * Fork your own repo if you haven't done so.
 * Create a new branch from the latest `development` branch in the main repo.
 * Make your changes in your own feature/bugfix branch.
@@ -39,7 +39,7 @@ Please make sure your PR satisfies the following criteria:
   [SPLASH-05] Add HDFS implementation...
   ```
   So that Github will do the favor of creating a link from your PR to the issue.
-* Make sure that all the automatic verification for the PR is passing.
+* Make sure that all of the automatic verifications for the PR are passing.
 * Make sure you have a test to cover the change.
 * Test coverage of the overall project should not drop more than 0.5%.
 * If you are a new contributor, make sure to add your name to the contributors'
@@ -73,11 +73,11 @@ We have a simple governance model.  There are two roles:
 Maintainers work as gate keepers.  Each PR requires at least the approval of 
 two maintainers to get into the main repo.
 
-Maintainers will be responsible for nominate the new maintainer from the 
+Maintainers will be responsible for nominating the new maintainer from the 
 contributors.  When the nomination is approved by most of the existing 
 maintainers, the contributor becomes a new maintainer.
 
-Maintainers could voluntarily give up their maintainer role when they want to 
+Maintainers can voluntarily give up their maintainer role when they want to 
 step away from the project.
 
 ### Maintainers
