@@ -2,6 +2,7 @@
 
 [![travis-ci](https://img.shields.io/travis/MemVerge/splash/master.svg)](https://travis-ci.org/MemVerge/splash)
 [![codecov](https://img.shields.io/codecov/c/gh/MemVerge/splash/master.svg)](https://codecov.io/gh/MemVerge/splash)
+[![license](https://img.shields.io/github/license/MemVerge/splash.svg)](LICENSE)
 
 A shuffle manager for Spark that supports different storage plugins.
 
@@ -21,7 +22,23 @@ In general, the current shuffle manager in Spark has some shortcomings.
 * There is no easy/general solution to plugin external storage to the shuffle 
   service.
   
+
 We want to address these issues in this shuffle manager.
+
+---
+
+* [License](#license)
+* [Deployment](#deployment)
+* [Release](#release)
+* [Upgrade](#upgrade)
+* [Service & Support](#service--support)
+* [Community](#community)
+* [Contributing](#contributing)
+* [Build](#build)
+* [Options](#options)
+* [Plugin Development](#plugin-development)
+
+---
 
 ## License
 [Apache License Version 2.0](LICENSE)
@@ -42,16 +59,19 @@ Check the [Build](#build) section for how to generate your customized jar.
   Spark and Scala version.  Typically, you only need to add two configurations 
   in your `spark-defaults.conf`
   
-  ```
-  spark.driver.extraClassPath /path/to/splash.jar
-  spark.executor.extraClassPath /path/to/splash.jar
-  ```
+```
+spark.driver.extraClassPath /path/to/splash.jar
+spark.executor.extraClassPath /path/to/splash.jar
+```
+
 * You can include the plugin jar in the same way.
 * You can configure your Spark application to use the Splash shuffle manager 
   by adding the following option:
+
 ```
-spark.shuffle.manager org.apache.spark.shuffle.sort.SplashShuffleManager
+spark.shuffle.manager org.apache.spark.shuffle.SplashShuffleManager
 ```
+
 * The storage plugin is tunable at the application level.  The user can specify 
   different storage implementations for different applications.
 * Support both on-premise and cloud deployments.
@@ -106,6 +126,7 @@ Please check the [Contributing](CONTRIBUTING.md) document for details.
     `./target/failsafe-reports`
 
 * Use `mvn pmd:pmd` to run static code analysis.
+
   * Analysis report is available in: `./target/site/pmd.html`
 
 ## Options
@@ -130,3 +151,22 @@ The Splash project is currently released with two default plugins:
 
 These plugins also serve as examples for developers to develop their own 
 storage plugins.
+
+### Deploy Shared Folder Storage Plugin
+Take NFS as an example, here are the steps to configure Splash with the shared folder plugin.
+* Update the configurations in `spark-defaults.conf`:
+
+```
+# add the Splash jar to the classpath
+spark.driver.extraClassPath /path/to/splash.jar
+spark.executor.extraClassPath /path/to/splash.jar
+
+# set shuffle manager and storage plugin
+spark.shuffle.manager org.apache.spark.shuffle.SplashShuffleManager
+spark.shuffle.splash.storageFactory com.memverge.splash.shared.SharedFSFactory
+
+# set the location of your shared folder
+spark.shuffle.splash.folder /your/share/folder
+```
+* Make sure that all your Spark nodes can access the shared folder you specified in the configuration file.
+* Run some sample Spark applications and you should be able to observe that the application folder is created in a shared folder.
