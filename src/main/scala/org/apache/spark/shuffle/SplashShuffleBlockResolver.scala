@@ -228,12 +228,16 @@ private[spark] class SplashShuffleBlockResolver(
         val numOfLong = index.getSize / 8
         val offsets = 0L until numOfLong map { _ => in.readLong() }
 
-        // calculate lengths from offsets
-        val lengths = offsets zip offsets.tail map (i => i._2 - i._1)
-        // the size of data file should match with index file
-        // first element must be 0
-        if (offsets(0) == 0 && data.getSize == lengths.sum) {
-          ret = lengths.toArray
+        if (offsets.nonEmpty) {
+          // calculate lengths from offsets
+          val lengths = offsets zip offsets.tail map (i => i._2 - i._1)
+          // the size of data file should match with index file
+          // first element must be 0
+          if (offsets(0) == 0 && data.getSize == lengths.sum) {
+            ret = lengths.toArray
+          }
+        } else {
+          log.warn("offsets length is zero, {} is empty & corrupt.", index.getPath)
         }
       }
     }

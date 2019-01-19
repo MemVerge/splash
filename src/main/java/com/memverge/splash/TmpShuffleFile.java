@@ -36,6 +36,11 @@ public interface TmpShuffleFile extends ShuffleFile {
 
   ShuffleFile getCommitTarget();
 
+  /**
+   * Commit the tmp file to the target file.
+   * The implementation of this method must be atomic.
+   * If the commit target already exists, it should be removed.
+   */
   ShuffleFile commit() throws IOException;
 
   void recall();

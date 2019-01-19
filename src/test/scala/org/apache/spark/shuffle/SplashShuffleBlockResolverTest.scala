@@ -137,8 +137,12 @@ class SplashShuffleBlockResolverTest {
   def testCheckIndexAndDataFileSizeNotMatch(): Unit = {
     val indices = Array(10L, 0L, 20L)
     val mapId = 5
-    resolver.writeIndices(resolver.getIndexTmpFile(shuffleId, mapId), indices)
-    resolver.writeData(resolver.getDataTmpFile(shuffleId, mapId), new Array[Byte](29))
+    val tmpIndexFile = resolver.getIndexTmpFile(shuffleId, mapId)
+    resolver.writeIndices(tmpIndexFile, indices)
+    tmpIndexFile.commit()
+    val tmpDataFile = resolver.getDataTmpFile(shuffleId, mapId)
+    resolver.writeData(tmpDataFile, new Array[Byte](29))
+    tmpDataFile.commit()
 
     val actual = resolver.checkIndexAndDataFile(shuffleId, mapId)
     assertThat(actual) isNull()
@@ -157,5 +161,38 @@ class SplashShuffleBlockResolverTest {
     assertThat(dataTmp.exists()) isFalse()
     assertThat(indexFile.exists()) isTrue()
     assertThat(indexFile.getSize) isEqualTo 0
+  }
+
+  def testCheckIndexAndDataFileEmptyIndex(): Unit = {
+    val indices = Array[Long]()
+    val mapId = 7
+    val tmpIndexFile = resolver.getIndexTmpFile(shuffleId, mapId)
+    resolver.writeIndices(tmpIndexFile, indices)
+    tmpIndexFile.commit()
+    resolver.getDataTmpFile(shuffleId, mapId).commit()
+
+    val actual = resolver.checkIndexAndDataFile(shuffleId, mapId)
+    assertThat(actual) isEqualTo indices
+  }
+
+  def testCheckIndexAndDataFileZeroLengthIndex(): Unit = {
+    val mapId = 8
+    resolver.getIndexTmpFile(shuffleId, mapId).commit()
+    resolver.getDataTmpFile(shuffleId, mapId).commit()
+
+    val actual = resolver.checkIndexAndDataFile(shuffleId, mapId)
+    assertThat(actual) isNull()
+  }
+
+  def testCheckIndexAndDataFileEmptyPartitions(): Unit = {
+    val indices = Array[Long](0, 0, 0, 0)
+    val mapId = 9
+    val tmpIndexFile = resolver.getIndexTmpFile(shuffleId, mapId)
+    resolver.writeIndices(tmpIndexFile, indices)
+    tmpIndexFile.commit()
+    resolver.getDataTmpFile(shuffleId, mapId).commit()
+
+    val actual = resolver.checkIndexAndDataFile(shuffleId, mapId)
+    assertThat(actual) isEqualTo indices
   }
 }
