@@ -21,12 +21,15 @@ import java.util.concurrent.Semaphore
 import javax.annotation.concurrent.GuardedBy
 import org.apache.spark.InternalAccumulator.PEAK_EXECUTION_MEMORY
 import org.apache.spark._
+import org.apache.spark.executor.TaskMetrics
 import org.apache.spark.memory.{MemoryManager, MemoryMode, TaskMemoryManager}
 import org.apache.spark.metrics.MetricsSystem
+import org.apache.spark.metrics.source.Source
 import org.apache.spark.scheduler._
 import org.apache.spark.serializer.{JavaSerializer, KryoSerializer}
 import org.apache.spark.shuffle.local.{LocalOpts, LocalStorageFactory}
 import org.apache.spark.storage.BlockId
+import org.apache.spark.util.{AccumulatorV2, TaskCompletionListener, TaskFailureListener}
 import org.assertj.core.api.Assertions.assertThat
 
 import scala.collection.mutable
@@ -40,19 +43,19 @@ object TestUtil {
     val cores = 4
     new MemoryManager(
       conf, cores, onHeapStorageMemory, onHeapExeMemory) {
-      /** @inheritdoc */
+      /** @inheritdoc*/
       override def maxOnHeapStorageMemory: Long = onHeapStorageMemory
 
-      /** @inheritdoc */
+      /** @inheritdoc*/
       override def maxOffHeapStorageMemory: Long = onHeapStorageMemory * 2
 
-      /** @inheritdoc */
+      /** @inheritdoc*/
       override def acquireStorageMemory(
           blockId: BlockId,
           numBytes: Long,
           memoryMode: MemoryMode): Boolean = true
 
-      /** @inheritdoc */
+      /** @inheritdoc*/
       override def acquireUnrollMemory(
           blockId: BlockId,
           numBytes: Long,
@@ -87,15 +90,10 @@ object TestUtil {
 
   def newTaskContext(conf: SparkConf): TaskContext = {
     val taskMemoryManager = new TaskMemoryManager(newMemoryManager(conf), 0)
-    new TaskContextImpl(
-      stageId = 0,
-      stageAttemptNumber = 0,
-      partitionId = 0,
-      taskAttemptId = 0,
-      attemptNumber = 0,
-      taskMemoryManager = taskMemoryManager,
-      localProperties = new Properties,
-      metricsSystem = newMetricsSystem(conf))
+    new MockTaskContext(
+      taskMemoryManager,
+      new Properties,
+      newMetricsSystem(conf))
   }
 
   def newSplashSorter[K, V, C](
@@ -143,7 +141,7 @@ object TestUtil {
     sc.addSparkListener(spillListener)
     body
     assertThat(spillListener.numSpilledStages) isEqualTo 0
-    sc.removeSparkListener(spillListener)
+    sc.listenerBus.removeListener(spillListener)
   }
 
   def assertSpilled[T](sc: SparkContext)(body: => T): Unit = {
@@ -151,7 +149,7 @@ object TestUtil {
     sc.addSparkListener(spillListener)
     body
     assertThat(spillListener.numSpilledStages) isGreaterThan 0
-    sc.removeSparkListener(spillListener)
+    sc.listenerBus.removeListener(spillListener)
   }
 
   def IntentionalFailure(): Exception = {
@@ -267,3 +265,62 @@ private class SaveInfoListener extends SparkListener {
 }
 
 case class ConfWithReducerN(conf: SparkConf, numReducer: Int)
+
+class MockTaskContext(
+    override val taskMemoryManager: TaskMemoryManager,
+    localProperties: Properties,
+    private val metricsSystem: MetricsSystem,
+    override val taskMetrics: TaskMetrics = TaskMetrics.empty
+) extends TaskContext {
+
+  private val onCompleteCallbacks = new ArrayBuffer[TaskCompletionListener]
+
+  private val onFailureCallbacks = new ArrayBuffer[TaskFailureListener]
+
+  private var reasonIfKilled: Option[String] = None
+
+  override def isCompleted(): Boolean = false
+
+  override def isInterrupted(): Boolean = reasonIfKilled.isDefined
+
+  override def isRunningLocally(): Boolean = false
+
+  override def addTaskCompletionListener(listener: TaskCompletionListener): TaskContext = {
+    onCompleteCallbacks += listener
+    this
+  }
+
+  override def addTaskFailureListener(listener: TaskFailureListener): TaskContext = {
+    onFailureCallbacks += listener
+    this
+  }
+
+  override def stageId(): Int = 0
+
+  override def partitionId(): Int = 0
+
+  override def attemptNumber(): Int = 0
+
+  override def taskAttemptId(): Long = 0L
+
+  override def getLocalProperty(key: String): String = localProperties.getProperty(key)
+
+  override def getMetricsSources(sourceName: String): Seq[Source] =
+    metricsSystem.getSourcesByName(sourceName)
+
+  override private[spark] def registerAccumulator(a: AccumulatorV2[_, _]): Unit =
+    taskMetrics.registerAccumulator(a)
+
+  def stageAttemptNumber(): Int = 0
+
+  private[spark] def killTaskIfInterrupted(): Unit = {
+    val reason = reasonIfKilled
+    if (reason.isDefined) {
+      throw new RuntimeException("mock task killed.")
+    }
+  }
+
+  private[spark] def getKillReason() = reasonIfKilled
+
+  private[spark] def setFetchFailed(fetchFailed: FetchFailedException): Unit = {}
+}
