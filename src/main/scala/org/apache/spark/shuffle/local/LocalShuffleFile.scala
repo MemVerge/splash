@@ -45,10 +45,11 @@ class LocalShuffleFile(path: String)
     if (isLocal) {
       file.length()
     } else {
-      master.getLocationsAndStatus(blockId)
-          .map(status => status.status.diskSize)
-          .filter(size => size > 0)
-          .head
+      master.getBlockStatus(blockId).values
+          .filter(status => status.diskSize > 0 || status.memSize > 0)
+          .map(status => status.diskSize + status.memSize)
+          .headOption
+          .getOrElse(0L)
     }
   }
 

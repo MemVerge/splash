@@ -20,49 +20,55 @@
  */
 package org.apache.spark.shuffle
 
-import org.apache.spark.internal.config
 import org.apache.spark.internal.config.{ConfigBuilder, ConfigEntry}
 import org.apache.spark.network.util.ByteUnit
 
 object SplashOpts {
-  val storageFactoryName: ConfigEntry[String] =
+  lazy val storageFactoryName: ConfigEntry[String] =
     ConfigBuilder("spark.shuffle.splash.storageFactory")
         .doc("class name of the storage factory to use.")
         .stringConf
         .createWithDefault("com.memverge.splash.shared.SharedFSFactory")
 
-  val localSplashFolder: ConfigEntry[String] =
+  lazy val localSplashFolder: ConfigEntry[String] =
     ConfigBuilder("spark.shuffle.splash.folder")
         .doc("location of the local folder")
         .stringConf
         .createWithDefault(null)
 
-  val clearShuffleOutput: ConfigEntry[Boolean] =
+  lazy val clearShuffleOutput: ConfigEntry[Boolean] =
     ConfigBuilder("spark.shuffle.splash.clearShuffleOutput")
         .doc("clear shuffle output if set to true.")
         .booleanConf
         .createWithDefault(true)
 
   // spark options
-  val forceSpillElements: ConfigEntry[Int] =
-    config.SHUFFLE_SPILL_NUM_ELEMENTS_FORCE_SPILL_THRESHOLD
+  lazy val forceSpillElements: ConfigEntry[Int] =
+    createIfNotExists("spark.shuffle.spill.numElementsForceSpillThreshold", builder => {
+      builder.doc("The maximum number of elements in memory before forcing the shuffle sorter to spill. " +
+          "By default it's Integer.MAX_VALUE, which means we never force the sorter to spill, " +
+          "until we reach some limitations, like the max page size limitation for the pointer " +
+          "array in the sorter.")
+          .intConf
+          .createWithDefault(Integer.MAX_VALUE)
+    })
 
-  val useRadixSort: ConfigEntry[Boolean] =
+  lazy val useRadixSort: ConfigEntry[Boolean] =
     createIfNotExists("spark.shuffle.sort.useRadixSort", builder => {
       builder.booleanConf.createWithDefault(true)
     })
 
-  val fastMergeEnabled: ConfigEntry[Boolean] =
+  lazy val fastMergeEnabled: ConfigEntry[Boolean] =
     createIfNotExists("spark.shuffle.unsafe.fastMergeEnabled", builder => {
       builder.booleanConf.createWithDefault(true)
     })
 
-  val shuffleCompress: ConfigEntry[Boolean] =
+  lazy val shuffleCompress: ConfigEntry[Boolean] =
     createIfNotExists("spark.shuffle.compress", builder => {
       builder.booleanConf.createWithDefault(true)
     })
 
-  val shuffleInitialBufferSize: ConfigEntry[Int] =
+  lazy val shuffleInitialBufferSize: ConfigEntry[Int] =
     createIfNotExists("spark.shuffle.sort.initialBufferSize", builder => {
       builder
           .doc("Shuffle initial buffer size used by the sorter.")
@@ -70,15 +76,22 @@ object SplashOpts {
           .createWithDefault(4096)
     })
 
-  val memoryMapThreshold: ConfigEntry[Long] =
+  lazy val memoryMapThreshold: ConfigEntry[Long] =
     createIfNotExists("spark.storage.memoryMapThreshold", builder => {
       builder.bytesConf(ByteUnit.BYTE).createWithDefaultString("2m")
     })
 
   // compatible entries for spark 2.1, scala 2.10, migrated from spark 2.3
-  val shuffleFileBufferKB: ConfigEntry[Long] = config.SHUFFLE_FILE_BUFFER_SIZE
+  lazy val shuffleFileBufferKB: ConfigEntry[Long] =
+    createIfNotExists("spark.shuffle.file.buffer", builder => {
+    builder.doc("Size of the in-memory buffer for each shuffle file output stream, in KiB unless " +
+        "otherwise specified. These buffers reduce the number of disk seeks and system calls " +
+        "made in creating intermediate shuffle files.")
+        .bytesConf(ByteUnit.KiB)
+        .createWithDefaultString("32k")
+  })
 
-  val bypassSortThreshold: ConfigEntry[Int] =
+  lazy val bypassSortThreshold: ConfigEntry[Int] =
     createIfNotExists("spark.shuffle.sort.bypassMergeThreshold", builder => {
       builder.doc("Use bypass merge sort shuffle writer if partition is lower than this")
           .intConf

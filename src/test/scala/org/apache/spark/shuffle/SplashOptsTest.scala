@@ -25,6 +25,17 @@ class SplashOptsTest {
   def testDefaultValues(): Unit = {
     assertThat(conf.get(SplashOpts.shuffleFileBufferKB)) isEqualTo 32
     assertThat(conf.get(SplashOpts.shuffleInitialBufferSize)) isEqualTo 4096
+    assertThat(conf.get(SplashOpts.storageFactoryName)) isNotEmpty()
+    assertThat(conf.get(SplashOpts.memoryMapThreshold)) isGreaterThan 0L
+    assertThat(conf.get(SplashOpts.localSplashFolder)) isNull()
+    assertThat(conf.get(SplashOpts.clearShuffleOutput)) isTrue()
+    assertThat(conf.get(SplashOpts.useRadixSort)) isTrue()
+    assertThat(conf.get(SplashOpts.shuffleCompress)) isTrue()
+  }
+
+  def testConfigsNotExistsInSpark210(): Unit = {
+    assertThat(conf.get(SplashOpts.shuffleFileBufferKB)) isEqualTo 32L
+    assertThat(conf.get(SplashOpts.forceSpillElements)) isEqualTo Integer.MAX_VALUE
   }
 
   def testSetValue(): Unit = {
