@@ -229,15 +229,30 @@ private[spark] class SplashShuffleBlockResolver(
         val offsets = 0L until numOfLong map { _ => in.readLong() }
 
         if (offsets.nonEmpty) {
-          // calculate lengths from offsets
-          val lengths = offsets zip offsets.tail map (i => i._2 - i._1)
-          // the size of data file should match with index file
-          // first element must be 0
-          if (offsets(0) == 0 && data.getSize == lengths.sum) {
-            ret = lengths.toArray
-          }
+          ret = validateData(offsets, data)
         } else {
           log.warn("offsets length is zero, {} is empty & corrupt.", index.getPath)
+        }
+      }
+    }
+    ret
+  }
+
+  private def validateData(offsets: IndexedSeq[Long], data: ShuffleFile): Array[Long] = {
+    var ret: Array[Long] = null
+
+    // calculate lengths from offsets
+    val lengths = offsets zip offsets.tail map (i => i._2 - i._1)
+    // the size of data file should match with index file
+    // first element must be 0
+    if (offsets(0) == 0 && data.getSize == lengths.sum) {
+      ret = lengths.toArray
+
+      if (log.isDebugEnabled) {
+        log.debug("log md5 for {} during shuffle write.", data.getPath)
+        // print MD5 for each partition
+        (0 to offsets.length - 2).foreach { i =>
+          logPartitionMd5(data, offsets(i), offsets(i + 1))
         }
       }
     }
