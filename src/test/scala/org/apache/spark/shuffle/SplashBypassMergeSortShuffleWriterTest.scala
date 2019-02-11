@@ -38,6 +38,7 @@ class SplashBypassMergeSortShuffleWriterTest {
   private var shuffleId = 0
   private var writer: SplashBypassMergeSortShuffleWriter[Int, Int] = _
   private var taskContext: TaskContext = _
+  private var handle: SplashBypassMergeSortShuffleHandle[Int, Int] = _
 
   private def dataFile = resolver.getDataFile(shuffleId, mapId)
 
@@ -60,7 +61,7 @@ class SplashBypassMergeSortShuffleWriterTest {
     val rdd = sc.parallelize((1 to 100) zip (100 to 1))
         .partitionBy(new HashPartitioner(reducerNum))
     val dep = new ShuffleDependency[Int, Int, Int](rdd, rdd.partitioner.get)
-    val handle = dep.shuffleHandle.asInstanceOf[SplashBypassMergeSortShuffleHandle[Int, Int]]
+    handle = dep.shuffleHandle.asInstanceOf[SplashBypassMergeSortShuffleHandle[Int, Int]]
     taskContext = TestUtil.newTaskContext(sc.conf)
     shuffleId = handle.shuffleId
     writer = new SplashBypassMergeSortShuffleWriter[Int, Int](
@@ -95,6 +96,28 @@ class SplashBypassMergeSortShuffleWriterTest {
   }
 
   def testWriteWithSomeEmptyPartitions(): Unit = {
+    def records =
+      Iterator((1, 1), (5, 5)) ++ (0 until 1000).iterator.map(_ => (2, 2))
+
+    writer.write(records)
+    val status = writer.stop(true)
+    val lengths = writer.getPartitionLengths
+    verifyMapStatus(status)
+    assertThat(lengths.sum) isEqualTo dataFile.getSize
+    assertThat(lengths.count(_ == 0L)) isEqualTo 4
+    assertThat(storageFactory.getTmpFileCount) isEqualTo 0
+
+    val taskMetrics = taskContext.taskMetrics()
+    val shuffleWriteMetrics = taskMetrics.shuffleWriteMetrics
+    assertThat(shuffleWriteMetrics.bytesWritten) isEqualTo dataFile.getSize
+    assertThat(shuffleWriteMetrics.recordsWritten) isEqualTo records.length
+    assertThat(taskMetrics.diskBytesSpilled) isEqualTo 0
+    assertThat(taskMetrics.memoryBytesSpilled) isEqualTo 0
+  }
+
+  def testWriteWithSomeEmptyPartitionsWithNoEmptyFile(): Unit = {
+    writer = new SplashBypassMergeSortShuffleWriter[Int, Int](
+      resolver, handle, mapId, taskContext, true)
     def records =
       Iterator((1, 1), (5, 5)) ++ (0 until 1000).iterator.map(_ => (2, 2))
 

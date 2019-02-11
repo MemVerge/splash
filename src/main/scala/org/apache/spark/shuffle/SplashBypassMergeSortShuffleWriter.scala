@@ -33,7 +33,8 @@ private[spark] class SplashBypassMergeSortShuffleWriter[K, V](
     resolver: SplashShuffleBlockResolver,
     handle: SplashBypassMergeSortShuffleHandle[K, V],
     mapId: Int,
-    taskContext: TaskContext) extends ShuffleWriter[K, V] with Logging {
+    taskContext: TaskContext,
+    noEmptyFile: Boolean = false) extends ShuffleWriter[K, V] with Logging {
 
   private val dep = handle.dependency
   private val partitioner = dep.partitioner
@@ -70,7 +71,8 @@ private[spark] class SplashBypassMergeSortShuffleWriter[K, V](
           tmpDataFile,
           serializer,
           fileBufferSize,
-          writeMetrics)
+          writeMetrics,
+          noEmptyFile = noEmptyFile)
       })
 
       writeMetrics.incWriteTime(System.nanoTime() - start)
