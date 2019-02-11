@@ -16,6 +16,7 @@
 package com.memverge.splash;
 
 import com.google.common.io.Closeables;
+
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
@@ -24,6 +25,7 @@ import java.util.List;
 import java.util.Objects;
 import java.util.UUID;
 import java.util.stream.Collectors;
+
 import org.apache.commons.io.IOUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -54,7 +56,14 @@ public interface TmpShuffleFile extends ShuffleFile {
     final Logger log = LoggerFactory.getLogger(TmpShuffleFile.class);
     final OutputStream out = makeOutputStream();
     log.info("merge {} files into {}.", srcFiles.size(), getPath());
-    final List<Long> lengths = srcFiles.stream().map(file -> {
+    final List<Long> lengths = srcFiles.stream().filter(file -> {
+      try {
+        return ((ShuffleFile) file).exists();
+      } catch (IOException e) {
+        log.warn("Failed to check existence of {}.", file.getPath());
+        return false;
+      }
+    }).map(file -> {
       Long copied = null;
       try (final InputStream in = file.makeInputStream()) {
         copied = (long) IOUtils.copy(in, out);
