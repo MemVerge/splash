@@ -55,18 +55,24 @@ public interface TmpShuffleFile extends ShuffleFile {
     final OutputStream out = makeOutputStream();
     log.info("merge {} files into {}.", srcFiles.size(), getPath());
     final List<Long> lengths = srcFiles.stream().map(file -> {
-      Long copied = null;
-      try (final InputStream in = file.makeInputStream()) {
-        copied = (long) IOUtils.copy(in, out);
-      } catch (IOException e) {
-        log.error("merge input from {} to {} failed.",
-            file.getPath(), getPath(), e);
-      } finally {
-        try {
-          file.delete();
-        } catch (IOException e) {
-          log.warn("delete {} failed.", file.getPath(), e);
+      Long copied = 0L;
+      try {
+        if (file.exists()) {
+          try (final InputStream in = file.makeInputStream()) {
+            copied = (long) IOUtils.copy(in, out);
+          } catch (IOException e) {
+            log.error("merge input from {} to {} failed.",
+                file.getPath(), getPath(), e);
+          } finally {
+            try {
+              file.delete();
+            } catch (IOException e) {
+              log.warn("delete {} failed.", file.getPath(), e);
+            }
+          }
         }
+      } catch (IOException e) {
+        log.error("failed to check existence of {}", file.getPath(), e);
       }
       return copied;
     }).collect(Collectors.toList());

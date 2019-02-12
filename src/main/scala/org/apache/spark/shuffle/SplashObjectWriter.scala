@@ -51,7 +51,8 @@ private[spark] class SplashObjectWriter(
     val file: TmpShuffleFile,
     splashSerializer: SplashSerializer = SplashSerializer(),
     bufferSize: Int = 32 * 1024,
-    writeMetrics: ShuffleWriteMetrics = new ShuffleWriteMetrics())
+    writeMetrics: ShuffleWriteMetrics = new ShuffleWriteMetrics(),
+    noEmptyFile: Boolean = false)
     extends OutputStream with Logging {
 
   private var initialized = false
@@ -90,6 +91,9 @@ private[spark] class SplashObjectWriter(
       Utils.tryWithSafeFinally {
         closeOs()
         mcs.manualClose()
+        if (noEmptyFile && file.exists() && file.getSize == 0) {
+          file.recall()
+        }
       } {
         countOs = null
         initialized = false
@@ -133,7 +137,7 @@ private[spark] class SplashObjectWriter(
     }
   }
 
-  def  commitAndGet(): Long = {
+  def commitAndGet(): Long = {
     flush()
     closeOs()
 
