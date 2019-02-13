@@ -32,8 +32,6 @@ class SplashShuffleManager(conf: SparkConf) extends ShuffleManager with Logging 
   StorageFactoryHolder.setSparkConf(conf)
   private val numMapsForShuffle = new ConcurrentHashMap[Int, Int]()
 
-  StorageFactoryHolder.onApplicationStart()
-
   /**
    * Return a resolver capable of retrieving shuffle block data based on block
    * coordinates.

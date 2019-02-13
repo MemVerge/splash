@@ -63,6 +63,7 @@ public class StorageFactoryHolder {
   }
 
   public static void onApplicationStart() {
+    logger.info("call onApplicationStart of all splash shuffle listeners.");
     getListeners().forEach(ShuffleListener::onApplicationStart);
   }
 
@@ -75,6 +76,7 @@ public class StorageFactoryHolder {
   }
 
   public static void onApplicationEnd() {
+    logger.info("call onApplicationEnd of all splash shuffle listeners.");
     getListeners().forEach(ShuffleListener::onApplicationEnd);
   }
 

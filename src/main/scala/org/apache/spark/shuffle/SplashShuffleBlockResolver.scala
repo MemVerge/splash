@@ -35,6 +35,7 @@ private[spark] class SplashShuffleBlockResolver(
     appId: String,
     fileBufferSizeKB: Int = 8)
     extends ShuffleBlockResolver with Logging {
+  StorageFactoryHolder.onApplicationStart()
 
   def getAppId: String = appId
 
