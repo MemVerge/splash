@@ -21,10 +21,14 @@
 package org.apache.spark.shuffle
 
 import java.io._
+import java.nio.file.Paths
 import java.security.MessageDigest
 import java.util.concurrent.ConcurrentHashMap
 
 import com.memverge.splash.{ShuffleFile, StorageFactory, StorageFactoryHolder, TmpShuffleFile}
+import org.apache.commons.io.IOUtils
+import org.apache.commons.lang3.StringUtils
+import org.apache.spark.{SparkConf, SparkEnv}
 import org.apache.spark.internal.Logging
 import org.apache.spark.network.buffer.ManagedBuffer
 import org.apache.spark.network.util.LimitedInputStream
@@ -139,6 +143,48 @@ private[spark] class SplashShuffleBlockResolver(
       logDebug(s"md5 for ${dataFile.getPath} offset $offset, length ${buf.length}: $str")
       Some(is)
     }
+  }
+
+  private def getDumpFolder = {
+    val env = SparkEnv.get
+    var localSplashFolder = ""
+    if (env != null) {
+      val conf = env.conf
+      if (conf != null) {
+        localSplashFolder = conf.get(SplashOpts.localSplashFolder)
+      }
+    }
+    val dumpFolder = if (StringUtils.isEmpty(localSplashFolder)) {
+      System.getProperty("java.io.tmpdir")
+    } else {
+      localSplashFolder
+    }
+    dumpFolder
+  }
+
+  def dump(blockId: BlockId): String = {
+    val dumpFolder: String = getDumpFolder
+    val dumpFilePath = Paths.get(dumpFolder, s"${blockId.name}.dump")
+    val dumpFile = dumpFilePath.toFile
+    if (dumpFile.exists()) {
+      log.info(s"old dump file $dumpFilePath already exists, remove it first.")
+      dumpFile.delete()
+    }
+    SplashUtils.withResources {
+      new FileOutputStream(dumpFile)
+    } { os =>
+      getBlockData(blockId) match {
+        case Some(is) =>
+          try {
+            IOUtils.copy(is, os)
+            log.info(s"dump ${blockId.name} to $dumpFilePath success.")
+          } finally {
+            is.close()
+          }
+        case _ => log.warn(s"input stream is not available for ${blockId.name}")
+      }
+    }
+    dumpFilePath.toString
   }
 
   def removeDataByMap(shuffleId: Int, mapId: Int): Unit = {
