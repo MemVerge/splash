@@ -16,6 +16,7 @@
 package org.apache.spark.shuffle.sort
 
 import com.memverge.splash.StorageFactoryHolder
+import com.memverge.splash.shared.SharedFSFactory
 import org.apache.spark._
 import org.apache.spark.internal.config
 import org.apache.spark.io.{LZ4CompressionCodec, LZFCompressionCodec, SnappyCompressionCodec}
@@ -122,6 +123,38 @@ class SplashUnsafeShuffleWriterTest {
       }
     }
     recordsList.toList
+  }
+
+  // Use this test to verify your partition dump
+  @Test(enabled = false)
+  def testReadShuffleDumpFile(): Unit = {
+    val files: Array[String] = Array(
+      "/Users/shuffle_16_31_8.dump",
+      "/Users/shuffle_16_60_2.dump"
+    )
+    files.foreach(file => {
+      val writer = createWriter()
+      val factory = new SharedFSFactory()
+      val dataFile = factory.getDataFile(file)
+
+      try {
+        SplashUtils.withResources(dataFile.makeInputStream()) { is =>
+          val in = writer.wrap(is)
+          val recordsIs = serializer.newInstance().deserializeStream(in)
+          val recordsIterator = recordsIs.asKeyValueIterator
+          var count = 0
+          while (recordsIterator.hasNext) {
+            recordsIterator.next()
+            count += 1
+          }
+          recordsIs.close()
+          println(s"$file is ok with $count records.")
+        }
+      } catch {
+        case e: Exception =>
+          println(s"$file is not valid. ${e.getMessage}")
+      }
+    })
   }
 
   def testMustCallWriteBeforeSuccessfulStop(): Unit = {

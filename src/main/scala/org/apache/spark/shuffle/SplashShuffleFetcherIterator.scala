@@ -45,11 +45,39 @@ private[spark] class SplashShuffleFetcherIterator(
       .filter(_._2 > 0) // only retrieve blocks not empty
       .map(_._1)
 
+  private var currentBlockId: BlockId = _
+  private var currentStream: InputStream = _
+
   private val inputIterator = getInputs
 
-  override def hasNext: Boolean = inputIterator.hasNext
+  override def hasNext: Boolean = {
+    try {
+      inputIterator.hasNext
+    } catch {
+      case e: Exception =>
+        log.error(s"error checking next value for ${currentBlockId.name}", e)
+        resolver.dump(currentBlockId)
+        throw e
+    }
+  }
 
-  override def next(): (BlockId, InputStream, Int) = inputIterator.next()
+  override def next(): (BlockId, InputStream, Int) = {
+    try {
+      inputIterator.next()
+    } catch {
+      case e: Exception =>
+        log.error(s"error getting next value of ${currentBlockId.name}", e)
+        dump()
+        throw e
+    }
+  }
+
+  def dump(): String = {
+    val size = resolver.getBlockData(currentBlockId).size
+    val offset = size - currentStream.available()
+    log.info(s"current block: $currentBlockId, size: $size, offset: $offset")
+    resolver.dump(currentBlockId)
+  }
 
   private def getInputs = {
     blockIds.iterator.flatMap { blockId =>
@@ -58,6 +86,8 @@ private[spark] class SplashShuffleFetcherIterator(
           case Some(inputStream) =>
             val length = inputStream.available()
             logDebug(s"Read shuffle ${blockId.name}, length: $length")
+            currentBlockId = blockId
+            currentStream = inputStream
             Some((blockId, inputStream, length))
           case None =>
             val msg = s"Failed to load block ${blockId.name}."

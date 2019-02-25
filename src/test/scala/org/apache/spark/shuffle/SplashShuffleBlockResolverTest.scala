@@ -20,8 +20,11 @@
  */
 package org.apache.spark.shuffle
 
+import java.io.File
+
 import com.memverge.splash.StorageFactoryHolder
 import org.apache.spark.SparkContext
+import org.apache.spark.storage.ShuffleBlockId
 import org.assertj.core.api.Assertions.assertThat
 import org.testng.annotations._
 
@@ -194,5 +197,15 @@ class SplashShuffleBlockResolverTest {
 
     val actual = resolver.checkIndexAndDataFile(shuffleId, mapId)
     assertThat(actual) isEqualTo indices
+  }
+
+  def testDumpFile(): Unit = {
+    val indices = Array(110L, 230L, 17L)
+    val total = indices.sum.intValue()
+    val mapId = 10
+
+    resolver.writeShuffle(shuffleId, mapId, indices, new Array[Byte](total))
+    val dumpFile = resolver.dump(ShuffleBlockId(shuffleId, mapId, 1))
+    assertThat(new File(dumpFile).length()) isEqualTo 230
   }
 }

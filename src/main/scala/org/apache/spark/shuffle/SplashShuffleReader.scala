@@ -42,7 +42,7 @@ private[spark] class SplashShuffleReader[K, C](
 
   private val dep = handle.dependency
 
-  /** @inheritdoc */
+  /** @inheritdoc*/
   override def read(): Iterator[Product2[K, C]] = {
     val shuffleBlocks = mapOutputTracker.getMapSizesByExecutorId(
       handle.shuffleId, startPartition, endPartition)
@@ -64,7 +64,19 @@ private[spark] class SplashShuffleReader[K, C](
       } catch {
         case ioe: IOException =>
           logError(s"Failed to read ${blockId.name}")
+          resolver.dump(blockId)
           throw ioe
+      }
+    }
+
+    def dumpCurrentPartitionOnError[T](f: ()=>T): T = {
+      try {
+        f()
+      } catch {
+        case e: Exception =>
+          log.error(s"dump current partition on error.", e)
+          fetcherIterator.dump()
+          throw e
       }
     }
 
@@ -89,7 +101,10 @@ private[spark] class SplashShuffleReader[K, C](
         // have made sure its compatible w/ this aggregator, which will convert the value
         // type to the combined type C
         val keyValuesIterator = interruptibleIter.asInstanceOf[Iterator[(K, Nothing)]]
-        aggregator.combineValuesByKey(keyValuesIterator, context)
+
+        dumpCurrentPartitionOnError(() => {
+          aggregator.combineValuesByKey(keyValuesIterator, context)
+        })
       }
     } else {
       require(!dep.mapSideCombine, "Map-side combine without Aggregator specified!")
@@ -102,7 +117,11 @@ private[spark] class SplashShuffleReader[K, C](
         // Create an ExternalSorter to sort the data.
         val sorter =
           new SplashSorter[K, C, C](context, ordering = Some(keyOrd), serializer = SplashSerializer(dep))
-        sorter.insertAll(aggregatedIter)
+
+        dumpCurrentPartitionOnError(() => {
+          sorter.insertAll(aggregatedIter)
+        })
+
         context.taskMetrics().incMemoryBytesSpilled(sorter.memoryBytesSpilled)
         context.taskMetrics().incDiskBytesSpilled(sorter.bytesSpilled)
         context.taskMetrics().incPeakExecutionMemory(sorter.peakMemoryUsedBytes)
