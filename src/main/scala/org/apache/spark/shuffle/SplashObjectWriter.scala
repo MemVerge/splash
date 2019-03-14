@@ -91,7 +91,7 @@ private[spark] class SplashObjectWriter(
       Utils.tryWithSafeFinally {
         closeOs()
         mcs.manualClose()
-        if (noEmptyFile && file.exists() && file.getSize == 0) {
+        if (noEmptyFile && committedPosition == 0) {
           file.recall()
         }
       } {

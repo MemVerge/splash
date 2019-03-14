@@ -21,14 +21,14 @@
 package org.apache.spark.shuffle
 
 import java.io._
-import java.nio.file.Paths
+import java.nio.file.{FileAlreadyExistsException, Paths}
 import java.security.MessageDigest
 import java.util.concurrent.ConcurrentHashMap
 
 import com.memverge.splash.{ShuffleFile, StorageFactory, StorageFactoryHolder, TmpShuffleFile}
 import org.apache.commons.io.IOUtils
 import org.apache.commons.lang3.StringUtils
-import org.apache.spark.{SparkConf, SparkEnv}
+import org.apache.spark.SparkEnv
 import org.apache.spark.internal.Logging
 import org.apache.spark.network.buffer.ManagedBuffer
 import org.apache.spark.network.util.LimitedInputStream
@@ -192,6 +192,17 @@ private[spark] class SplashShuffleBlockResolver(
     getIndexFile(shuffleId, mapId) delete()
   }
 
+  private def createEmptyFile(tmpShuffleFile: TmpShuffleFile): Unit = {
+    try {
+      tmpShuffleFile.create()
+    } catch {
+      case ex: FileAlreadyExistsException =>
+        logDebug(s"${tmpShuffleFile.getPath} not found: ${ex.getMessage}")
+      case ex: IOException =>
+        logWarning("failed to create file", ex)
+    }
+  }
+
   def writeIndexFileAndCommit(
       shuffleId: Int,
       mapId: Int,
@@ -203,12 +214,8 @@ private[spark] class SplashShuffleBlockResolver(
     if (lengths.length == 0 || lengths.sum == 0) {
       // even if there is nothing to write,
       // we need to make sure the tmp files are created.
-      if (!indexTmp.exists()) {
-        indexTmp.create()
-      }
-      if (!dataTmp.exists()) {
-        dataTmp.create()
-      }
+      createEmptyFile(indexTmp)
+      createEmptyFile(dataTmp)
     } else {
       SplashUtils.withResources(
         new DataOutputStream(
@@ -272,7 +279,7 @@ private[spark] class SplashShuffleBlockResolver(
     val data = getDataFile(shuffleId, mapId)
     var ret: Array[Long] = null
     // the index file should have `block + 1` longs as offset.
-    if (data.exists() && index.exists()) {
+    try {
       SplashUtils.withResources(
         new DataInputStream(
           new BufferedInputStream(
@@ -283,9 +290,16 @@ private[spark] class SplashShuffleBlockResolver(
         if (offsets.nonEmpty) {
           ret = validateData(offsets, data)
         } else {
-          log.warn("offsets length is zero, {} is empty & corrupt.", index.getPath)
+          logDebug(s"offsets length is zero, ${index.getPath} is empty.")
         }
       }
+    } catch {
+      case ex@(_: IllegalArgumentException |
+               _: FileNotFoundException |
+               _: IllegalStateException) =>
+        logDebug(s"create input stream failed: ${ex.getMessage}")
+      case ex: IOException =>
+        logWarning("check index and data file failed", ex)
     }
     ret
   }

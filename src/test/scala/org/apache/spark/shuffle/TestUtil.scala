@@ -17,6 +17,7 @@ package org.apache.spark.shuffle
 
 import java.util.Properties
 import java.util.concurrent.Semaphore
+import java.util.concurrent.atomic.AtomicLong
 
 import javax.annotation.concurrent.GuardedBy
 import org.apache.spark.InternalAccumulator.PEAK_EXECUTION_MEMORY
@@ -43,6 +44,8 @@ object TestUtil {
     val cores = 4
     new MemoryManager(
       conf, cores, onHeapStorageMemory, onHeapExeMemory) {
+      private val executionMemory = new AtomicLong(0)
+
       /** @inheritdoc*/
       override def maxOnHeapStorageMemory: Long = onHeapStorageMemory
 
@@ -64,7 +67,22 @@ object TestUtil {
       def acquireExecutionMemory(
           numBytes: Long,
           taskAttemptId: Long,
-          memoryMode: MemoryMode): Long = numBytes
+          memoryMode: MemoryMode): Long = {
+        executionMemory.addAndGet(numBytes)
+        numBytes
+      }
+
+      override def releaseExecutionMemory(
+          numBytes: Long,
+          taskAttemptId: Long,
+          memoryMode: MemoryMode
+      ): Unit = {
+        val allocated = executionMemory.get()
+        if (numBytes > allocated) {
+          logError(s"hold $allocated memory, cannot release $numBytes")
+        }
+        executionMemory.addAndGet(-numBytes)
+      }
     }
   }
 
@@ -89,7 +107,8 @@ object TestUtil {
       .set("spark.shuffle.splash.useBaseShuffle", "true")
 
   def newTaskContext(conf: SparkConf): TaskContext = {
-    val taskMemoryManager = new TaskMemoryManager(newMemoryManager(conf), 0)
+    val memoryManager = newMemoryManager(conf)
+    val taskMemoryManager = new TaskMemoryManager(memoryManager, 0)
     new MockTaskContext(
       taskMemoryManager,
       new Properties,
@@ -169,7 +188,6 @@ object TestUtil {
   private def confWithLocalStorage(alwaysRemote: Boolean) =
     confWithStorageFactory(classOf[LocalStorageFactory].getName)
         .set(LocalOpts.alwaysUseRemote, alwaysRemote)
-
 
   def getSparkConfArray: Array[SparkConf] = {
     Array(
