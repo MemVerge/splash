@@ -64,7 +64,6 @@ private[spark] class SplashUnsafeSorter(
 
   private val storageFactory = StorageFactoryHolder.getFactory
 
-  private[this] val taskMemoryManager = context.taskMemoryManager()
   private val writeMetrics = context.taskMetrics().shuffleWriteMetrics
 
   private val initialSize: Int = conf.get(SplashOpts.shuffleInitialBufferSize)

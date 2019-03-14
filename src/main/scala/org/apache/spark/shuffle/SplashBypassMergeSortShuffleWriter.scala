@@ -20,6 +20,8 @@
  */
 package org.apache.spark.shuffle
 
+import java.io.{FileNotFoundException, IOException}
+
 import com.memverge.splash.TmpShuffleFile
 import org.apache.spark.internal.Logging
 import org.apache.spark.scheduler.MapStatus
@@ -139,8 +141,14 @@ private[spark] class SplashBypassMergeSortShuffleWriter[K, V](
           try {
             partitionWriters.foreach(writer => {
               val file = writer.revertPartialWritesAndClose()
-              if (file.exists() && !file.delete()) {
-                logWarning(s"Error while deleting file ${file.getPath}")
+              try {
+                file.delete()
+              } catch {
+                case _: FileNotFoundException =>
+                  logDebug(s"${file.getPath} not exists, nothing to do")
+                case e: IOException =>
+                  logWarning(s"Error deleting file ${file.getPath}, " +
+                      s"error: ${e.getMessage}")
               }
             })
           } finally {

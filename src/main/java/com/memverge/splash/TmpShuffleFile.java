@@ -37,9 +37,8 @@ public interface TmpShuffleFile extends ShuffleFile {
   ShuffleFile getCommitTarget();
 
   /**
-   * Commit the tmp file to the target file.
-   * The implementation of this method must be atomic.
-   * If the commit target already exists, it should be removed.
+   * Commit the tmp file to the target file. The implementation of this method
+   * must be atomic. If the commit target already exists, it should be removed.
    */
   ShuffleFile commit() throws IOException;
 
@@ -57,23 +56,22 @@ public interface TmpShuffleFile extends ShuffleFile {
     final List<Long> lengths = srcFiles.stream().map(file -> {
       Long copied = 0L;
       try {
-        if (file.exists()) {
-          try (final InputStream in = file.makeInputStream()) {
-            copied = (long) IOUtils.copy(in, out);
+        try (final InputStream in = file.makeInputStream()) {
+          copied = (long) IOUtils.copy(in, out);
+        } catch (IOException e) {
+          log.error("merge input from {} to {} failed.",
+              file.getPath(), getPath(), e);
+        } finally {
+          try {
+            file.delete();
           } catch (IOException e) {
-            log.error("merge input from {} to {} failed.",
-                file.getPath(), getPath(), e);
-          } finally {
-            try {
-              file.delete();
-            } catch (IOException e) {
-              log.warn("delete {} failed.", file.getPath(), e);
-            }
+            log.warn("delete {} failed.", file.getPath(), e);
           }
         }
-      } catch (IOException e) {
-        log.error("failed to check existence of {}", file.getPath(), e);
+      } catch (IllegalArgumentException ex) {
+        log.debug("create input stream failed, error: {}", ex.getMessage());
       }
+
       return copied;
     }).collect(Collectors.toList());
     final boolean threwException = lengths.stream().anyMatch(Objects::isNull);

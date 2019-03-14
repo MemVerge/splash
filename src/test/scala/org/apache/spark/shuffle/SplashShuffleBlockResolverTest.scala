@@ -23,6 +23,8 @@ package org.apache.spark.shuffle
 import java.io.File
 
 import com.memverge.splash.StorageFactoryHolder
+import org.apache.commons.io.FileUtils
+import org.apache.commons.lang3.StringUtils
 import org.apache.spark.SparkContext
 import org.apache.spark.storage.ShuffleBlockId
 import org.assertj.core.api.Assertions.assertThat
@@ -33,6 +35,7 @@ import org.testng.annotations._
 class SplashShuffleBlockResolverTest {
   private var resolver: SplashShuffleBlockResolver = _
   private var sc: SparkContext = _
+  private var dumpFile: String = _
 
   @BeforeClass
   def beforeClass(): Unit = {
@@ -54,6 +57,9 @@ class SplashShuffleBlockResolverTest {
   @AfterMethod
   def afterMethod(): Unit = {
     StorageFactoryHolder.getFactory.reset()
+    if (StringUtils.isNotEmpty(dumpFile)) {
+      FileUtils.deleteQuietly(new File(dumpFile))
+    }
   }
 
   private val shuffleId = 1
@@ -205,7 +211,7 @@ class SplashShuffleBlockResolverTest {
     val mapId = 10
 
     resolver.writeShuffle(shuffleId, mapId, indices, new Array[Byte](total))
-    val dumpFile = resolver.dump(ShuffleBlockId(shuffleId, mapId, 1))
+    dumpFile = resolver.dump(ShuffleBlockId(shuffleId, mapId, 1))
     assertThat(new File(dumpFile).length()) isEqualTo 230
   }
 }
