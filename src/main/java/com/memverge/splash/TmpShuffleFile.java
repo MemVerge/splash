@@ -47,35 +47,4 @@ public interface TmpShuffleFile extends ShuffleFile {
   UUID uuid();
 
   OutputStream makeOutputStream();
-
-  default List<Long> merge(Collection<? extends ShuffleFile> srcFiles)
-      throws IOException {
-    final Logger log = LoggerFactory.getLogger(TmpShuffleFile.class);
-    final OutputStream out = makeOutputStream();
-    log.info("merge {} files into {}.", srcFiles.size(), getPath());
-    final List<Long> lengths = srcFiles.stream().map(file -> {
-      Long copied = 0L;
-      try {
-        try (final InputStream in = file.makeInputStream()) {
-          copied = (long) IOUtils.copy(in, out);
-        } catch (IOException e) {
-          log.error("merge input from {} to {} failed.",
-              file.getPath(), getPath(), e);
-        } finally {
-          try {
-            file.delete();
-          } catch (IOException e) {
-            log.warn("delete {} failed.", file.getPath(), e);
-          }
-        }
-      } catch (IllegalArgumentException ex) {
-        log.debug("create input stream failed, error: {}", ex.getMessage());
-      }
-
-      return copied;
-    }).collect(Collectors.toList());
-    final boolean threwException = lengths.stream().anyMatch(Objects::isNull);
-    Closeables.close(out, threwException);
-    return lengths;
-  }
 }

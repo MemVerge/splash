@@ -21,8 +21,8 @@
 package org.apache.spark.shuffle
 
 import com.memverge.splash.StorageFactoryHolder
-import org.apache.spark.scheduler.MapStatus
 import org.apache.spark._
+import org.apache.spark.scheduler.MapStatus
 import org.assertj.core.api.Assertions.assertThat
 import org.testng.annotations.{AfterClass, BeforeClass, BeforeMethod, Test}
 
@@ -39,8 +39,6 @@ class SplashBypassMergeSortShuffleWriterTest {
   private var writer: SplashBypassMergeSortShuffleWriter[Int, Int] = _
   private var taskContext: TaskContext = _
   private var handle: SplashBypassMergeSortShuffleHandle[Int, Int] = _
-
-  private def dataFile = resolver.getDataFile(shuffleId, mapId)
 
   @BeforeClass
   def beforeClass(): Unit = {
@@ -84,8 +82,7 @@ class SplashBypassMergeSortShuffleWriterTest {
     assertThat(lengths.length) isEqualTo reducerNum
     assertThat(lengths.sum) isEqualTo 0
 
-    assertThat(dataFile.exists()) isTrue()
-    assertThat(dataFile.getSize) isEqualTo 0L
+    assertThat(totalDataFileSize) isEqualTo 0L
 
     val taskMetrics = taskContext.taskMetrics()
     val shuffleWriteMetrics = taskMetrics.shuffleWriteMetrics
@@ -103,21 +100,29 @@ class SplashBypassMergeSortShuffleWriterTest {
     val status = writer.stop(true)
     val lengths = writer.getPartitionLengths
     verifyMapStatus(status)
-    assertThat(lengths.sum) isEqualTo dataFile.getSize
+    assertThat(lengths.sum) isEqualTo totalDataFileSize
     assertThat(lengths.count(_ == 0L)) isEqualTo 4
     assertThat(storageFactory.getTmpFileCount) isEqualTo 0
 
     val taskMetrics = taskContext.taskMetrics()
     val shuffleWriteMetrics = taskMetrics.shuffleWriteMetrics
-    assertThat(shuffleWriteMetrics.bytesWritten) isEqualTo dataFile.getSize
+    assertThat(shuffleWriteMetrics.bytesWritten) isEqualTo totalDataFileSize
     assertThat(shuffleWriteMetrics.recordsWritten) isEqualTo records.length
     assertThat(taskMetrics.diskBytesSpilled) isEqualTo 0
     assertThat(taskMetrics.memoryBytesSpilled) isEqualTo 0
   }
 
+  private def totalDataFileSize = {
+    (0 until reducerNum).map(reducerId => {
+      val dataFile = resolver.getDataFile(shuffleId, mapId, reducerId)
+      dataFile.getSize
+    }).sum
+  }
+
   def testWriteWithSomeEmptyPartitionsWithNoEmptyFile(): Unit = {
     writer = new SplashBypassMergeSortShuffleWriter[Int, Int](
       resolver, handle, mapId, taskContext, true)
+
     def records =
       Iterator((1, 1), (5, 5)) ++ (0 until 1000).iterator.map(_ => (2, 2))
 
@@ -125,13 +130,13 @@ class SplashBypassMergeSortShuffleWriterTest {
     val status = writer.stop(true)
     val lengths = writer.getPartitionLengths
     verifyMapStatus(status)
-    assertThat(lengths.sum) isEqualTo dataFile.getSize
+    assertThat(lengths.sum) isEqualTo totalDataFileSize
     assertThat(lengths.count(_ == 0L)) isEqualTo 4
     assertThat(storageFactory.getTmpFileCount) isEqualTo 0
 
     val taskMetrics = taskContext.taskMetrics()
     val shuffleWriteMetrics = taskMetrics.shuffleWriteMetrics
-    assertThat(shuffleWriteMetrics.bytesWritten) isEqualTo dataFile.getSize
+    assertThat(shuffleWriteMetrics.bytesWritten) isEqualTo totalDataFileSize
     assertThat(shuffleWriteMetrics.recordsWritten) isEqualTo records.length
     assertThat(taskMetrics.diskBytesSpilled) isEqualTo 0
     assertThat(taskMetrics.memoryBytesSpilled) isEqualTo 0

@@ -51,28 +51,41 @@ private[spark] class SplashShuffleBlockResolver(
 
   private val lockMap = new ConcurrentHashMap[(Int, Int), Object]()
 
+  private val shuffleTypeManager = ShuffleTypeManager(this)
+
   private val lockSupplier = new java.util.function.Function[(Int, Int), Object]() {
     override def apply(t: (Int, Int)): Object = new Object()
   }
 
-  /** @inheritdoc */
+  /** @inheritdoc*/
   override def getBlockData(blockId: ShuffleBlockId): ManagedBuffer =
     throw new UnsupportedOperationException("Not used by Splash.")
 
+  def getDataTmpFile(shuffleId: Int, mapId: Int, reducerId: Int): TmpShuffleFile = {
+    storageFactory.makeDataFile(dataFilename(shuffleId, mapId, reducerId))
+  }
+
   def getDataTmpFile(shuffleId: Int, mapId: Int): TmpShuffleFile = {
-    storageFactory.makeDataFile(dataFilename(shuffleId, mapId))
+    getDataTmpFile(shuffleId, mapId, NOOP_REDUCE_ID)
+  }
+
+  def getDataFile(shuffleId: Int, mapId: Int, reducerId: Int): ShuffleFile = {
+    storageFactory.getDataFile(dataFilename(shuffleId, mapId, reducerId))
   }
 
   def getDataFile(shuffleId: Int, mapId: Int): ShuffleFile = {
-    storageFactory.getDataFile(dataFilename(shuffleId, mapId))
+    getDataFile(shuffleId, mapId, NOOP_REDUCE_ID)
   }
 
-  private def dataFilename(shuffleId: ShuffleId, mapId: ShuffleId) = {
-    new File(s"$shuffleFolder", s"shuffle_${shuffleId}_${mapId}_0.data").toString
+  private def dataFilename(
+      shuffleId: ShuffleId, mapId: ShuffleId, reducerId: ShuffleId): String = {
+    new File(s"$shuffleFolder",
+      s"shuffle_${shuffleId}_${mapId}_$reducerId.data").toString
   }
 
   private def indexFilename(shuffleId: ShuffleId, mapId: ShuffleId) = {
-    new File(s"$shuffleFolder", s"shuffle_${shuffleId}_${mapId}_0.index").toString
+    new File(s"$shuffleFolder",
+      s"shuffle_${shuffleId}_${mapId}_$NOOP_REDUCE_ID.index").toString
   }
 
   def getDataFile(shuffleBlockId: ShuffleBlockId): ShuffleFile = {
@@ -94,37 +107,63 @@ private[spark] class SplashShuffleBlockResolver(
   def getBlockData(blockId: BlockId): Option[InputStream] = {
     if (blockId.isShuffle) {
       val shuffleBlockId = blockId.asInstanceOf[ShuffleBlockId]
-      val indexFile = getIndexFile(shuffleBlockId)
-      val dataFile = getDataFile(shuffleBlockId)
-      try
-        SplashUtils.withResources {
-          val indexIs = indexFile.makeInputStream()
-          logDebug(s"Shuffle ${indexFile.getPath}, seek ${shuffleBlockId.reduceId * 8L}")
-          indexIs.skip(shuffleBlockId.reduceId * 8L)
-          new DataInputStream(new BufferedInputStream(indexIs, 16))
-        } { indexDataIs =>
-          val offset = indexDataIs.readLong()
-          val nextOffset = indexDataIs.readLong()
-          logDebug(s"got partition of $blockId from $offset to $nextOffset " +
-              s"from ${indexFile.getPath} size ${indexFile.getSize}")
-          val dataIs = new LimitedInputStream(dataFile.makeInputStream(), nextOffset)
-          dataIs.skip(offset)
-
-          if (log.isDebugEnabled) {
-            logPartitionMd5(dataFile, offset, nextOffset)
-          }
-
-          Some(new BufferedInputStream(dataIs, fileBufferSizeKB * 1024))
-        }
-      catch {
-        case ex: IOException =>
-          logError(s"Read file ${blockId.name} failed.", ex)
-          None
+      if (shuffleTypeManager.isHashBasedShuffle(shuffleBlockId)) {
+        readHashBasedPartition(shuffleBlockId)
+      } else {
+        readPartitionByIndex(blockId, shuffleBlockId)
       }
     } else {
       log.error(s"only works for shuffle block id, current block id: $blockId")
       None
     }
+  }
+
+  private def readHashBasedPartition(shuffleBlockId: ShuffleBlockId) = {
+    val dataFile = getDataFile(
+      shuffleBlockId.shuffleId,
+      shuffleBlockId.mapId,
+      shuffleBlockId.reduceId)
+    val dataIs = dataFile.makeInputStream()
+
+    if (log.isDebugEnabled) {
+      logPartitionMd5(dataFile)
+    }
+
+    Some(new BufferedInputStream(dataIs, fileBufferSizeKB * 1024))
+  }
+
+  private def readPartitionByIndex(blockId: BlockId, shuffleBlockId: ShuffleBlockId) = {
+    val indexFile = getIndexFile(shuffleBlockId)
+    val dataFile = getDataFile(shuffleBlockId)
+    try
+      SplashUtils.withResources {
+        val indexIs = indexFile.makeInputStream()
+        logDebug(s"Shuffle ${indexFile.getPath}, seek ${shuffleBlockId.reduceId * 8L}")
+        indexIs.skip(shuffleBlockId.reduceId * 8L)
+        new DataInputStream(new BufferedInputStream(indexIs, 16))
+      } { indexDataIs =>
+        val offset = indexDataIs.readLong()
+        val nextOffset = indexDataIs.readLong()
+        logDebug(s"got partition of $blockId from $offset to $nextOffset " +
+            s"from ${indexFile.getPath} size ${indexFile.getSize}")
+        val dataIs = new LimitedInputStream(dataFile.makeInputStream(), nextOffset)
+        dataIs.skip(offset)
+
+        if (log.isDebugEnabled) {
+          logPartitionMd5(dataFile, offset, nextOffset)
+        }
+
+        Some(new BufferedInputStream(dataIs, fileBufferSizeKB * 1024))
+      }
+    catch {
+      case ex: IOException =>
+        logError(s"Read file ${blockId.name} failed.", ex)
+        None
+    }
+  }
+
+  private def logPartitionMd5(dataFile: ShuffleFile): Some[BufferedInputStream] = {
+    logPartitionMd5(dataFile, 0, dataFile.getSize)
   }
 
   private def logPartitionMd5(dataFile: ShuffleFile, offset: Long, nextOffset: Long) = {
@@ -346,7 +385,7 @@ private[spark] class SplashShuffleBlockResolver(
     }
   }
 
-  /** @inheritdoc */
+  /** @inheritdoc*/
   override def stop(): Unit = {}
 
   private[spark] def shuffleFolder = storageFactory.getShuffleFolder(appId)
@@ -354,5 +393,38 @@ private[spark] class SplashShuffleBlockResolver(
   def cleanup(): Unit = {
     logInfo(s"cleanup shuffle folder $shuffleFolder for $appId")
     storageFactory.cleanShuffle(appId)
+  }
+}
+
+case class ShuffleTypeManager(resolver: SplashShuffleBlockResolver)
+    extends Logging {
+
+  private val hashShuffleSet = collection.mutable.Set[Int]()
+  private val sortShuffleSet = collection.mutable.Set[Int]()
+
+  def addHashShuffle(shuffleId: Int): Unit = {
+    hashShuffleSet.add(shuffleId)
+  }
+
+  def addSortShuffle(shuffleId: Int): Unit = {
+    sortShuffleSet.add(shuffleId)
+  }
+
+  def isHashBasedShuffle(shuffleBlockId: ShuffleBlockId): Boolean = {
+    val shuffleId = shuffleBlockId.shuffleId
+    if (hashShuffleSet.contains(shuffleId)) {
+      true
+    } else if (sortShuffleSet.contains(shuffleId)) {
+      false
+    } else {
+      if (!resolver.getIndexFile(shuffleBlockId).exists()) {
+        logDebug(s"add $shuffleId to hash based shuffle set")
+        hashShuffleSet.add(shuffleId)
+      } else {
+        logDebug(s"add $shuffleId to sort based shuffle set")
+        sortShuffleSet.add(shuffleId)
+      }
+      isHashBasedShuffle(shuffleBlockId)
+    }
   }
 }

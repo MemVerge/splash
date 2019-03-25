@@ -22,13 +22,10 @@ package org.apache.spark.shuffle
 
 import java.io.{FileNotFoundException, IOException}
 
-import com.memverge.splash.TmpShuffleFile
 import org.apache.spark.internal.Logging
 import org.apache.spark.scheduler.MapStatus
 import org.apache.spark.storage.TempShuffleBlockId
 import org.apache.spark.{SparkEnv, TaskContext}
-
-import scala.collection.JavaConversions._
 
 
 private[spark] class SplashBypassMergeSortShuffleWriter[K, V](
@@ -37,7 +34,6 @@ private[spark] class SplashBypassMergeSortShuffleWriter[K, V](
     mapId: Int,
     taskContext: TaskContext,
     noEmptyFile: Boolean = false) extends ShuffleWriter[K, V] with Logging {
-
   private val dep = handle.dependency
   private val partitioner = dep.partitioner
   private val numPartitions = partitioner.numPartitions
@@ -48,25 +44,20 @@ private[spark] class SplashBypassMergeSortShuffleWriter[K, V](
 
   private var partitionWriters: Array[SplashObjectWriter] = _
   private var partitionLengths: Array[Long] = _
-  private var partitionTmpWrites: Array[TmpShuffleFile] = _
   private var mapStatus: MapStatus = _
   private var stopping = false
 
   override def write(records: Iterator[Product2[K, V]]): Unit = {
     require(partitionWriters == null)
+    partitionLengths = Array.fill(numPartitions)(0L)
     if (!records.hasNext) {
-      val tmpShuffleIdPlusFile = resolver.getDataTmpFile(shuffleId, mapId)
-      partitionLengths = new Array[Long](numPartitions)
-      resolver.writeIndexFileAndCommit(
-        shuffleId, mapId, partitionLengths, tmpShuffleIdPlusFile)
       mapStatus = MapStatus(resolver.blockManagerId, partitionLengths)
     } else {
       val serializer = SplashSerializer(dep)
       val start = System.nanoTime()
       partitionWriters = new Array[SplashObjectWriter](numPartitions)
-      partitionTmpWrites = new Array[TmpShuffleFile](numPartitions)
       (0 until numPartitions).foreach(i => {
-        val tmpDataFile = resolver.getDataTmpFile(shuffleId, mapId)
+        val tmpDataFile = resolver.getDataTmpFile(shuffleId, mapId, i)
         val blockId = TempShuffleBlockId(tmpDataFile.uuid)
         partitionWriters(i) = new SplashObjectWriter(
           blockId,
@@ -87,43 +78,38 @@ private[spark] class SplashBypassMergeSortShuffleWriter[K, V](
 
         (0 until numPartitions).foreach(i => {
           val writer = partitionWriters(i)
-          partitionTmpWrites(i) = writer.file
+          val file = writer.file
           writer.close()
+          file.commit()
+          partitionLengths(i) = file.getCommitTarget.getSize
         })
+      } catch {
+        case e: Exception =>
+          logError("error writing partition, roll back this task", e)
+          (0 until numPartitions).foreach(i => {
+            partitionLengths(i) = 0
+            try {
+              val writer = partitionWriters(i)
+              writer.close()
+              writer.file.recall()
+            } catch {
+              case e: Exception =>
+                logInfo(s"recall shuffle_${shuffleId}_${mapId}_$i failed", e)
+            }
 
-        val tmp = resolver.getDataTmpFile(shuffleId, mapId)
-        try {
-          partitionLengths = writePartitionedFile(tmp)
-          resolver.writeIndexFileAndCommit(shuffleId, mapId, partitionLengths, tmp)
-        } finally {
-          tmp.recall()
-        }
-      } finally {
-        partitionWriters.foreach(writer => {
-          writer.close()
-          if (writer.file != null) {
-            writer.file.recall()
-          }
-        })
+            try {
+              resolver.getDataFile(shuffleId, mapId, i).delete()
+            } catch {
+              case e: Exception =>
+                logInfo(s"remove shuffle_${shuffleId}_${mapId}_$i failed", e)
+            }
+          })
       }
     }
     mapStatus = MapStatus(resolver.blockManagerId, partitionLengths)
   }
 
   private[spark] def getPartitionLengths = partitionLengths
-
-  private def writePartitionedFile(outputFile: TmpShuffleFile): Array[Long] = {
-    if (partitionWriters == null) {
-      new Array[Long](numPartitions)
-    } else {
-      val start = System.nanoTime()
-      val lengths = outputFile.merge(partitionTmpWrites.toSeq)
-          .map(_.asInstanceOf[Long]).toArray
-      partitionTmpWrites = null
-      writeMetrics.incWriteTime(System.nanoTime() - start)
-      lengths
-    }
-  }
 
   override def stop(success: Boolean): Option[MapStatus] = {
     if (stopping) {
