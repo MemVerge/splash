@@ -22,7 +22,7 @@ package org.apache.spark.shuffle
 
 import java.io.{FileNotFoundException, IOException}
 
-import com.memverge.splash.TmpShuffleFile
+import com.memverge.splash.{StorageFactoryHolder, TmpShuffleFile}
 import org.apache.spark.internal.Logging
 import org.apache.spark.scheduler.MapStatus
 import org.apache.spark.storage.TempShuffleBlockId
@@ -38,6 +38,7 @@ private[spark] class SplashBypassMergeSortShuffleWriter[K, V](
     taskContext: TaskContext,
     noEmptyFile: Boolean = false) extends ShuffleWriter[K, V] with Logging {
 
+  private lazy val storageFactory = StorageFactoryHolder.getFactory
   private val dep = handle.dependency
   private val partitioner = dep.partitioner
   private val numPartitions = partitioner.numPartitions
@@ -66,7 +67,7 @@ private[spark] class SplashBypassMergeSortShuffleWriter[K, V](
       partitionWriters = new Array[SplashObjectWriter](numPartitions)
       partitionTmpWrites = new Array[TmpShuffleFile](numPartitions)
       (0 until numPartitions).foreach(i => {
-        val tmpDataFile = resolver.getDataTmpFile(shuffleId, mapId)
+        val tmpDataFile = storageFactory.makeSpillFile()
         val blockId = TempShuffleBlockId(tmpDataFile.uuid)
         partitionWriters(i) = new SplashObjectWriter(
           blockId,
