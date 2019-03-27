@@ -284,6 +284,24 @@ class SplashSorterTest {
   }
 
   @Test(dataProvider = "confWithReducerNumList")
+  def testBypassMergeSortEmptyPartitions(confWithReducerN: ConfWithReducerN): Unit = {
+    val conf = TestUtil.hashBasedConf(confWithReducerN.conf)
+    val size = 5000
+    sc = newSparkContextWithForceSpillSize(conf, size / 4)
+    val result = sc.parallelize(0 until size)
+        .map { i => (i / 2, i) }
+        .groupByKey(confWithReducerN.numReducer)
+        .collect()
+    assertThat(result.length) isEqualTo size / 2
+    result foreach { case (i, seq) =>
+      val actual = seq.toSet
+      val expected = Set(i * 2, i * 2 + 1)
+      val msg = s"Value for $i was wrong: expected $expected, got $actual"
+      assertThat(actual) isEqualTo expected describedAs msg
+    }
+  }
+
+  @Test(dataProvider = "confWithReducerNumList")
   def testSpillLocalCoGroup(conf: ConfWithReducerN): Unit = {
     val size = 5000
     sc = newSparkContextWithForceSpillSize(conf.conf, size / 4)

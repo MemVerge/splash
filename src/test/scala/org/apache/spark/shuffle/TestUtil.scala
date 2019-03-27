@@ -103,6 +103,9 @@ object TestUtil {
       .set("spark.shuffle.sort.bypassMergeThreshold", "0")
       .set("splash.local.internal.alwaysRemote", "false")
 
+  def hashBasedConf(conf: SparkConf): SparkConf =
+    conf.set("spark.shuffle.sort.bypassMergeThreshold", "1000000")
+
   def newBaseShuffleConf: SparkConf = newSparkConf()
       .set("spark.shuffle.splash.useBaseShuffle", "true")
 

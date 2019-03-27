@@ -49,15 +49,18 @@ class SplashShuffleManager(conf: SparkConf) extends ShuffleManager with Logging 
       numMaps: Int,
       dependency: ShuffleDependency[K, V, C]): ShuffleHandle = {
     if (shouldBypassMergeSort(dependency)) {
+      logInfo("apply SplashBypassMergeSortShuffleHandle")
       new SplashBypassMergeSortShuffleHandle[K, V](
         shuffleId, numMaps, dependency.asInstanceOf[ShuffleDependency[K, V, V]]
       )
     } else if (useSerializedShuffle(dependency)) {
       // Try to buffer map outputs in a serialized form, since this
       // is more efficient:
+      logInfo("apply SplashSerializedShuffleHandle")
       new SplashSerializedShuffleHandle[K, V](
         shuffleId, numMaps, dependency.asInstanceOf[ShuffleDependency[K, V, V]])
     } else {
+      logInfo("apply BaseShuffleHandle")
       // Buffer map outputs in a deserialized form:
       new BaseShuffleHandle(shuffleId, numMaps, dependency)
     }
@@ -182,6 +185,8 @@ class SplashShuffleManager(conf: SparkConf) extends ShuffleManager with Logging 
       false
     } else {
       val bypassMergeThreshold: Int = conf.get(SplashOpts.bypassSortThreshold)
+      logInfo(s"partitions ${dep.partitioner.numPartitions}, " +
+          s"bypass merge threshold $bypassMergeThreshold")
       dep.partitioner.numPartitions <= bypassMergeThreshold
     }
   }
