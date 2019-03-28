@@ -21,6 +21,7 @@ import java.io.FileInputStream;
 import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.InputStream;
+import lombok.val;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -62,7 +63,7 @@ public class SharedFSShuffleFile implements ShuffleFile {
       ret = new FileInputStream(file);
       log.debug("create input stream for {}.", getPath());
     } catch (FileNotFoundException e) {
-      String msg = String.format("Create input stream failed for %s.", getPath());
+      val msg = String.format("Create input stream failed for %s.", getPath());
       throw new IllegalArgumentException(msg, e);
     }
     return ret;
@@ -73,12 +74,20 @@ public class SharedFSShuffleFile implements ShuffleFile {
   }
 
   void rename(String tgtId) throws IOException {
-    File tgtFile = new File(tgtId);
+    val tgtFile = new File(tgtId);
+    val parent = tgtFile.getParentFile();
+    if (!parent.exists()) {
+      if (!parent.mkdirs()) {
+        val msg = String.format("create parent folder %s failed",
+            parent.getAbsolutePath());
+        throw new IOException(msg);
+      }
+    }
     boolean success = file.renameTo(tgtFile);
     if (success) {
       log.debug("rename {} to {}.", getPath(), tgtId);
     } else {
-      String msg = String.format("rename file to %s failed.", tgtId);
+      val msg = String.format("rename file to %s failed.", tgtId);
       throw new IOException(msg);
     }
   }

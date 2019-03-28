@@ -57,7 +57,7 @@ private[spark] class SplashShuffleBlockResolver(
     override def apply(t: (Int, Int)): Object = new Object()
   }
 
-  /** @inheritdoc*/
+  /** @inheritdoc */
   override def getBlockData(blockId: ShuffleBlockId): ManagedBuffer =
     throw new UnsupportedOperationException("Not used by Splash.")
 
@@ -79,13 +79,17 @@ private[spark] class SplashShuffleBlockResolver(
 
   private def dataFilename(
       shuffleId: ShuffleId, mapId: ShuffleId, reducerId: ShuffleId): String = {
-    new File(s"$shuffleFolder",
-      s"shuffle_${shuffleId}_${mapId}_$reducerId.data").toString
+    Paths.get(s"$shuffleFolder",
+      s"shuffle_$shuffleId",
+      s"shuffle_${shuffleId}_${mapId}_$reducerId.data"
+    ).toString
   }
 
   private def indexFilename(shuffleId: ShuffleId, mapId: ShuffleId) = {
-    new File(s"$shuffleFolder",
-      s"shuffle_${shuffleId}_${mapId}_$NOOP_REDUCE_ID.index").toString
+    Paths.get(s"$shuffleFolder",
+      s"shuffle_$shuffleId",
+      s"shuffle_${shuffleId}_${mapId}_$NOOP_REDUCE_ID.index"
+    ).toString
   }
 
   def getDataFile(shuffleBlockId: ShuffleBlockId): ShuffleFile = {
@@ -385,7 +389,7 @@ private[spark] class SplashShuffleBlockResolver(
     }
   }
 
-  /** @inheritdoc*/
+  /** @inheritdoc */
   override def stop(): Unit = {}
 
   private[spark] def shuffleFolder = storageFactory.getShuffleFolder(appId)
