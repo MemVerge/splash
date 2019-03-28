@@ -96,7 +96,7 @@ class SplashShuffleReaderTest {
       (ShuffleBlockId(shuffleId, 0, reducerId), 1),
       (ShuffleBlockId(shuffleId, 1, reducerId), 1),
       (ShuffleBlockId(shuffleId, 2, reducerId), 1))
-    val actual = reader.readShuffleBlocks(blocks).toList
+    val actual = reader.readShuffleBlocks(blocks.iterator).toList
     var minKey = Int.MinValue
     for ((k: Int, _) <- actual) {
       assertThat(k) isGreaterThanOrEqualTo minKey
@@ -123,7 +123,7 @@ class SplashShuffleReaderTest {
       (ShuffleBlockId(shuffleId, 0, reducerId), 1),
       (ShuffleBlockId(shuffleId, 1, reducerId), 0),
       (ShuffleBlockId(shuffleId, 2, reducerId), 0))
-    val actual = reader.readShuffleBlocks(blocks).toList
+    val actual = reader.readShuffleBlocks(blocks.iterator).toList
 
     var minKey = Int.MinValue
     for ((k: Int, _) <- actual) {
