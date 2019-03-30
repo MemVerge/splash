@@ -50,7 +50,7 @@ private[spark] class SplashShuffleReader[K, C](
     readShuffleBlocks(shuffleBlocks)
   }
 
-  def readShuffleBlocks(shuffleBlocks: Seq[(BlockId, Long)]): Iterator[Product2[K, C]] = {
+  def readShuffleBlocks(shuffleBlocks: Iterator[(BlockId, Long)]): Iterator[Product2[K, C]] = {
     val fetcherIterator = new SplashShuffleFetcherIterator(resolver, shuffleBlocks)
 
     val readMetrics = context.taskMetrics().createTempShuffleReadMetrics()
