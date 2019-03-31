@@ -42,7 +42,7 @@ private[spark] class SplashShuffleReader[K, C](
 
   private val dep = handle.dependency
 
-  /** @inheritdoc*/
+  /** @inheritdoc */
   override def read(): Iterator[Product2[K, C]] = {
     val shuffleBlocks = mapOutputTracker.getMapSizesByExecutorId(
       handle.shuffleId, startPartition, endPartition)
@@ -50,7 +50,10 @@ private[spark] class SplashShuffleReader[K, C](
     readShuffleBlocks(shuffleBlocks)
   }
 
-  def readShuffleBlocks(shuffleBlocks: Seq[(BlockId, Long)]): Iterator[Product2[K, C]] = {
+  def readShuffleBlocks(shuffleBlocks: Seq[(BlockId, Long)]): Iterator[Product2[K, C]] =
+    readShuffleBlocks(shuffleBlocks.iterator)
+
+  def readShuffleBlocks(shuffleBlocks: Iterator[(BlockId, Long)]): Iterator[Product2[K, C]] = {
     val fetcherIterator = new SplashShuffleFetcherIterator(resolver, shuffleBlocks)
 
     val readMetrics = context.taskMetrics().createTempShuffleReadMetrics()
@@ -69,7 +72,7 @@ private[spark] class SplashShuffleReader[K, C](
       }
     }
 
-    def dumpCurrentPartitionOnError[T](f: ()=>T): T = {
+    def dumpCurrentPartitionOnError[T](f: () => T): T = {
       try {
         f()
       } catch {
