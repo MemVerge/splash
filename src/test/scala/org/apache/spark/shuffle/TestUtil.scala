@@ -46,19 +46,19 @@ object TestUtil {
       conf, cores, onHeapStorageMemory, onHeapExeMemory) {
       private val executionMemory = new AtomicLong(0)
 
-      /** @inheritdoc*/
+      /** @inheritdoc */
       override def maxOnHeapStorageMemory: Long = onHeapStorageMemory
 
-      /** @inheritdoc*/
+      /** @inheritdoc */
       override def maxOffHeapStorageMemory: Long = onHeapStorageMemory * 2
 
-      /** @inheritdoc*/
+      /** @inheritdoc */
       override def acquireStorageMemory(
           blockId: BlockId,
           numBytes: Long,
           memoryMode: MemoryMode): Boolean = true
 
-      /** @inheritdoc*/
+      /** @inheritdoc */
       override def acquireUnrollMemory(
           blockId: BlockId,
           numBytes: Long,
@@ -344,4 +344,23 @@ class MockTaskContext(
   private[spark] def getKillReason() = reasonIfKilled
 
   private[spark] def setFetchFailed(fetchFailed: FetchFailedException): Unit = {}
+
+  private var interruptReason: String = _
+
+  private var error: Throwable = _
+
+  private var taskCompleted: Boolean = false
+
+  private[spark] def markInterrupted(reason: String): Unit = interruptReason = reason
+
+  private[spark] def markTaskFailed(error: Throwable): Unit = this.error = error
+
+  private[spark] def markTaskCompleted(error: Option[Throwable]): Unit = {
+    taskCompleted = true
+    this.error = error.orNull
+  }
+
+  private[spark] def fetchFailed: Option[FetchFailedException] = None
+
+  private[spark] def getLocalProperties: Properties = new Properties()
 }

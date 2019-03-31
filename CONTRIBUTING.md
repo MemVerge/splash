@@ -86,6 +86,7 @@ step away from the project.
 * [Haiyan Wang](https://github.com/wanghy73)
 * [Yue Li](https://github.com/yuelimv)
 * [Jie Yu](https://github.com/jieyumv)
+* [Wei Xu](https://github.com/weixumv)
 
 ### Contributors
 * [Zeyi Qi](https://github.com/qzyse2017)

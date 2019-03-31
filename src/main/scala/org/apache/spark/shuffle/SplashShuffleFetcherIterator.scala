@@ -38,7 +38,7 @@ import org.apache.spark.storage.BlockId
  */
 private[spark] class SplashShuffleFetcherIterator(
     resolver: SplashShuffleBlockResolver,
-    shuffleBlocks: Seq[(BlockId, Long)])
+    shuffleBlocks: Iterator[(BlockId, Long)])
     extends Iterator[(BlockId, InputStream, Int)] with Logging {
 
   private val blockIds = shuffleBlocks
@@ -80,7 +80,7 @@ private[spark] class SplashShuffleFetcherIterator(
   }
 
   private def getInputs = {
-    blockIds.iterator.flatMap { blockId =>
+    blockIds.flatMap { blockId =>
       try {
         resolver.getBlockData(blockId) match {
           case Some(inputStream) =>

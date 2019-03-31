@@ -3,6 +3,7 @@ script:
   - mvn package -Dspark.version=${SPARK}
 env:
   matrix:
+    - SPARK=2.4.0
     - SPARK=2.3.2
     - SPARK=2.1.0
 after_success:
