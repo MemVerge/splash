@@ -77,8 +77,22 @@ public class TempFolder {
   }
 
   public int countShuffleFile(String appId) {
-    return Objects
-        .requireNonNull(new File(getShufflePath(appId)).list()).length;
+    int shuffleFileCount = 0;
+    File file = new File(getShufflePath(appId));
+    File[] files = file.listFiles();
+    if (files != null) {
+      for (File child : files) {
+        if (child.isFile()) {
+          shuffleFileCount += 1;
+        } else {
+          String[] grandChildren = child.list();
+          if (grandChildren != null) {
+            shuffleFileCount += grandChildren.length;
+          }
+        }
+      }
+    }
+    return shuffleFileCount;
   }
 
   public int countTmpFile() {
