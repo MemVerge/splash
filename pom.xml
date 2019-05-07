@@ -7,7 +7,7 @@
 
   <groupId>com.memverge</groupId>
   <artifactId>splash</artifactId>
-  <version>0.4.1</version>
+  <version>0.5.0</version>
   <name>splash</name>
   <description>A shuffle manager that contains a storage interface.</description>
   <url>https://github.com/MemVerge/splash/</url>
@@ -47,6 +47,7 @@
     <logback.version>1.2.3</logback.version>
     <guava.version>15.0</guava.version>
     <test.runner.version>2.22.1</test.runner.version>
+    <pmd.plugin.version>3.12.0</pmd.plugin.version>
     <!-- run IT with the `integration-test` script -->
     <skipIT>true</skipIT>
   </properties>
@@ -163,7 +164,7 @@
           <groupId>commons-io</groupId>
           <artifactId>commons-io</artifactId>
         </exclusion>
-      </exclusions> 
+      </exclusions>
     </dependency>
     <dependency>
       <groupId>org.testng</groupId>
@@ -338,19 +339,32 @@
           </javacArgs>
         </configuration>
       </plugin>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-site-plugin</artifactId>
+        <version>3.7.1</version>
+      </plugin>
     </plugins>
   </build>
 
   <reporting>
     <plugins>
       <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-jxr-plugin</artifactId>
+        <version>3.0.0</version>
+      </plugin>
+      <plugin>
         <!-- for mvn pmd:pmd -->
         <groupId>org.apache.maven.plugins</groupId>
         <artifactId>maven-pmd-plugin</artifactId>
-        <version>3.9.0</version>
+        <version>${pmd.plugin.version}</version>
         <configuration>
           <targetJdk>1.8</targetJdk>
           <sourceEncoding>utf-8</sourceEncoding>
+          <linkXref>true</linkXref>
+          <skipEmptyReport>false</skipEmptyReport>
+          <targetJdk>${java.version}</targetJdk>
         </configuration>
       </plugin>
       <plugin>

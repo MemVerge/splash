@@ -149,7 +149,7 @@ private[spark] class SplashShuffleBlockResolver(
         val offset = indexDataIs.readLong()
         val nextOffset = indexDataIs.readLong()
         logDebug(s"got partition of $blockId from $offset to $nextOffset " +
-            s"from ${indexFile.getPath} size ${indexFile.getSize}")
+            s"file ${indexFile.getPath} size ${indexFile.getSize}")
         val dataIs = new LimitedInputStream(dataFile.makeInputStream(), nextOffset)
         dataIs.skip(offset)
 

@@ -96,11 +96,9 @@ More specifically:
 ## Storage Plugin
 
 User can supply his/her own storage and network implementation for Splash 
-shuffle manager by implementing additional storage-plugins.  Currently, two 
-example plugins are provided out of the box:
+shuffle manager by implementing additional storage-plugins.  Currently, one 
+example plugin is provided out of the box:
 * The shared file system plugin runs on a mountable shared file system like NFS.
-* The local file system plugin implements the same behavior as the original 
-  Spark shuffle manager.
 
 This diagram below illustrates the structure of the storage plugin framework.
 

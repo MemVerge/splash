@@ -28,7 +28,6 @@ import org.apache.spark.metrics.MetricsSystem
 import org.apache.spark.metrics.source.Source
 import org.apache.spark.scheduler._
 import org.apache.spark.serializer.{JavaSerializer, KryoSerializer}
-import org.apache.spark.shuffle.local.{LocalOpts, LocalStorageFactory}
 import org.apache.spark.storage.BlockId
 import org.apache.spark.util.{AccumulatorV2, TaskCompletionListener, TaskFailureListener}
 import org.assertj.core.api.Assertions.assertThat
@@ -38,6 +37,12 @@ import scala.collection.mutable.ArrayBuffer
 import scala.util.control.NonFatal
 
 object TestUtil {
+
+  /**
+   * Create a mocked memory manager for test.
+   *
+   * @param conf spark conf
+   */
   private def newMemoryManager(conf: SparkConf): MemoryManager = {
     val onHeapStorageMemory = 100 * 1024 * 1024
     val onHeapExeMemory = 200 * 1024 * 1024
@@ -46,19 +51,15 @@ object TestUtil {
       conf, cores, onHeapStorageMemory, onHeapExeMemory) {
       private val executionMemory = new AtomicLong(0)
 
-      /** @inheritdoc */
       override def maxOnHeapStorageMemory: Long = onHeapStorageMemory
 
-      /** @inheritdoc */
       override def maxOffHeapStorageMemory: Long = onHeapStorageMemory * 2
 
-      /** @inheritdoc */
       override def acquireStorageMemory(
           blockId: BlockId,
           numBytes: Long,
           memoryMode: MemoryMode): Boolean = true
 
-      /** @inheritdoc */
       override def acquireUnrollMemory(
           blockId: BlockId,
           numBytes: Long,
@@ -98,6 +99,7 @@ object TestUtil {
       .set("spark.ui.enabled", "false")
       .set("spark.shuffle.manager", classOf[SplashShuffleManager].getName)
       .set("spark.hadoop.validateOutputSpecs", "false")
+      .set("spark.shuffle.compress", "true")
       .set("spark.shuffle.spill.batchSize", "10")
       .set("spark.shuffle.spill.initialMemoryThreshold", "512")
       .set("spark.shuffle.sort.bypassMergeThreshold", "0")
@@ -185,20 +187,11 @@ object TestUtil {
       .set("spark.serializer.objectStreamReset", "1")
       .set("spark.serializer", classOf[JavaSerializer].getName)
 
-  private def confWithStorageFactory(factoryName: String) =
+  def confWithStorageFactory(factoryName: String): SparkConf =
     confWithKryo.set("spark.shuffle.splash.storageFactory", factoryName)
 
-  private def confWithLocalStorage(alwaysRemote: Boolean) =
-    confWithStorageFactory(classOf[LocalStorageFactory].getName)
-        .set(LocalOpts.alwaysUseRemote, alwaysRemote)
-
   def getSparkConfArray: Array[SparkConf] = {
-    Array(
-      confWithKryo,
-      confWithoutKryo,
-      confWithLocalStorage(true),
-      confWithLocalStorage(false)
-    )
+    Array(confWithKryo, confWithoutKryo)
   }
 }
 

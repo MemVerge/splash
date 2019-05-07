@@ -155,7 +155,7 @@ private[spark] class SplashSorter[K, V, C](
     }
   }
 
-  /** @inheritdoc*/
+  /** @inheritdoc */
   override protected def spill(collection: WritablePartitionedPairCollection[K, C]): Unit = {
     val inMemoryIterator = destructiveSortedWritablePartitionedIterator(
       collection, comparator)
@@ -170,7 +170,7 @@ private[spark] class SplashSorter[K, V, C](
     WritablePartitionedIterator(it)
   }
 
-  /** @inheritdoc*/
+  /** @inheritdoc */
   override protected def forceSpill(): Boolean = {
     if (isShuffleSort) {
       false
@@ -384,14 +384,7 @@ private[spark] class SplashSorter[K, V, C](
 
     def nextBatchStream(): DeserializationStream = {
       if (batchId < batchOffsets.length - 1) {
-        if (deserializeStream != null) {
-          deserializeStream.close()
-          deserializeStream = null
-        }
-        if (inputStream != null) {
-          inputStream.close()
-          inputStream = null
-        }
+        closeStreams()
 
         val start = batchOffsets(batchId)
         inputStream = spill.file.makeInputStream()
@@ -474,15 +467,17 @@ private[spark] class SplashSorter[K, V, C](
 
     def cleanup(): Unit = {
       batchId = batchOffsets.length
-      val ds = deserializeStream
-      val is = inputStream
-      deserializeStream = null
-      inputStream = null
-      if (ds != null) {
-        ds.close()
+      closeStreams()
+    }
+
+    private def closeStreams(): Unit = {
+      if (deserializeStream != null) {
+        deserializeStream.close()
+        deserializeStream = null
       }
-      if (is != null) {
-        is.close()
+      if (inputStream != null) {
+        inputStream.close()
+        inputStream = null
       }
     }
   }

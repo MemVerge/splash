@@ -43,6 +43,7 @@ public class SharedFSShuffleFile implements ShuffleFile {
 
   @Override
   public boolean delete() {
+    log.debug("delete file {}", getPath());
     return file.delete();
   }
 
@@ -76,12 +77,10 @@ public class SharedFSShuffleFile implements ShuffleFile {
   void rename(String tgtId) throws IOException {
     val tgtFile = new File(tgtId);
     val parent = tgtFile.getParentFile();
-    if (!parent.exists()) {
-      if (!parent.mkdirs()) {
-        val msg = String.format("create parent folder %s failed",
-            parent.getAbsolutePath());
-        throw new IOException(msg);
-      }
+    if (!parent.exists() && !parent.mkdirs()) {
+      val msg = String.format("create parent folder %s failed",
+          parent.getAbsolutePath());
+      throw new IOException(msg);
     }
     boolean success = file.renameTo(tgtFile);
     if (success) {
