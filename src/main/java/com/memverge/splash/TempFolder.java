@@ -104,7 +104,7 @@ public class TempFolder {
     try {
       FileUtils.forceDelete(new File(path));
     } catch (FileNotFoundException e) {
-      // do nothing
+      log.debug("{} not exists.  do nothing.", path);
     } catch (IOException e) {
       log.error("failed to clean up local splash folder: {}", path, e);
     }

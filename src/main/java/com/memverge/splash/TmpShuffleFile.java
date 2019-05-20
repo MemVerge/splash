@@ -15,18 +15,9 @@
  */
 package com.memverge.splash;
 
-import com.google.common.io.Closeables;
 import java.io.IOException;
-import java.io.InputStream;
 import java.io.OutputStream;
-import java.util.Collection;
-import java.util.List;
-import java.util.Objects;
 import java.util.UUID;
-import java.util.stream.Collectors;
-import org.apache.commons.io.IOUtils;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 public interface TmpShuffleFile extends ShuffleFile {
 
