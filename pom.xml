@@ -7,7 +7,7 @@
 
   <groupId>com.memverge</groupId>
   <artifactId>splash</artifactId>
-  <version>0.5.0</version>
+  <version>0.5.1</version>
   <name>splash</name>
   <description>A shuffle manager that contains a storage interface.</description>
   <url>https://github.com/MemVerge/splash/</url>
@@ -345,6 +345,12 @@
         <version>3.7.1</version>
       </plugin>
     </plugins>
+    <resources>
+      <resource>
+        <directory>src/main/resources</directory>
+        <filtering>true</filtering>
+      </resource>
+    </resources>
   </build>
 
   <reporting>
