@@ -20,6 +20,7 @@
  */
 package org.apache.spark.shuffle
 
+import java.util.Properties
 import java.util.concurrent.ConcurrentHashMap
 
 import com.memverge.splash.StorageFactoryHolder
@@ -29,6 +30,8 @@ import org.apache.spark.shuffle.sort.SortShuffleManager.MAX_SHUFFLE_OUTPUT_PARTI
 import org.apache.spark.shuffle.sort.SplashUnsafeShuffleWriter
 
 class SplashShuffleManager(conf: SparkConf) extends ShuffleManager with Logging {
+  logInfo(s"initialize SplashShuffleManager ${SplashShuffleManager.version}")
+
   StorageFactoryHolder.setSparkConf(conf)
   private val numMapsForShuffle = new ConcurrentHashMap[Int, Int]()
 
@@ -212,4 +215,13 @@ private[spark] class SplashBypassMergeSortShuffleHandle[K, V](
     numMaps: Int,
     dependency: ShuffleDependency[K, V, V])
     extends BaseShuffleHandle(shuffleId, numMaps, dependency) {
+}
+
+object SplashShuffleManager {
+  def version: String = {
+    val properties = new Properties()
+    properties.load(
+      getClass.getClassLoader.getResourceAsStream("splash.properties"))
+    properties.getProperty("splash.version")
+  }
 }
