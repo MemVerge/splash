@@ -81,7 +81,7 @@ private[spark] class SplashBypassMergeSortShuffleWriter[K, V](
           val file = writer.file
           writer.close()
           file.commit()
-          partitionLengths(i) = file.getCommitTarget.getSize
+          partitionLengths(i) = writer.committedPosition
         })
       } catch {
         case e: Exception =>

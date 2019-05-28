@@ -350,12 +350,11 @@ private[spark] class SplashShuffleBlockResolver(
   private def validateData(offsets: IndexedSeq[Long], data: ShuffleFile): Array[Long] = {
     var ret: Array[Long] = null
 
-    // calculate lengths from offsets
-    val lengths = offsets zip offsets.tail map (i => i._2 - i._1)
     // the size of data file should match with index file
     // first element must be 0
-    if (offsets(0) == 0 && data.getSize == lengths.sum) {
-      ret = lengths.toArray
+    if (offsets(0) == 0 && data.getSize == offsets.last) {
+      // calculate lengths from offsets
+      ret = (offsets zip offsets.tail map (i => i._2 - i._1)).toArray
 
       if (log.isDebugEnabled) {
         log.debug("log md5 for {} during shuffle write.", data.getPath)

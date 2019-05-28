@@ -265,6 +265,7 @@ class SplashAppendOnlyMapTest {
     val consumer = createMap[String]
     map.insertAll((1 to rddSize).iterator.map(_.toString).map(i => (i, i)))
     assertThat(map.spill(10000, consumer)) isGreaterThan 0L
+    assertThat(map.bytesSpilled) isEqualTo 8580L
     map.cleanupSpillFile()
     consumer.cleanupSpillFile()
   }

@@ -365,7 +365,7 @@ private[spark] class SplashAppendOnlyMap[K, V, C](
         objectsWritten += 1
       }
       writer.close()
-      _bytesSpilled += spillTmpFile.getSize
+      _bytesSpilled += writer.committedPosition
       success = true
     } finally {
       if (!success || objectsWritten == 0) {

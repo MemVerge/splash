@@ -100,7 +100,7 @@ class SplashSpillableIterator[T](var upstream: Iterator[T],
         val spilledFile = spillInMemoryIterator(upstream)
         val shuffleTmpFile = spilledFile.file
         nextUpstream = getNextUpstream(spilledFile)
-        logInfo(s"spilling in-memory " +
+        logDebug(s"spilling in-memory " +
             s"data structure to storage ${shuffleTmpFile.getPath} " +
             s"size ${shuffleTmpFile.getSize}.")
         spilledFileOpt = Some(spilledFile)
