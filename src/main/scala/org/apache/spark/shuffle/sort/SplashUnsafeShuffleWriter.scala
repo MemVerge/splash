@@ -199,8 +199,8 @@ private[spark] class SplashUnsafeShuffleWriter[K, V](
           logDebug("Using slow merge")
           partitionLengths = mergeSpillsWithStream(spills, dataTmp, Some(compressionCodec))
         }
-        writeMetrics.decBytesWritten(spills(spills.length - 1).file.getSize)
-        writeMetrics.incBytesWritten(dataTmp.getSize)
+        writeMetrics.decBytesWritten(spills(spills.length - 1).spillSize)
+        writeMetrics.incBytesWritten(partitionLengths.sum)
         partitionLengths
       }
     } catch {

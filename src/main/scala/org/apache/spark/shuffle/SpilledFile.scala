@@ -31,7 +31,7 @@ case class SpilledFile(
     serializerBatchSizes: Array[Long] = Array[Long](),
     elementsPerPartition: Array[Long] = Array[Long]()) extends Logging {
   if (success) {
-    logInfo(s"Spill success: ${file.getPath}, size: ${file.getSize}")
+    logDebug(s"Spill success: ${file.getPath}, size: ${file.getSize}")
   } else {
     logInfo(s"Spill failed: ${file.getPath}")
   }

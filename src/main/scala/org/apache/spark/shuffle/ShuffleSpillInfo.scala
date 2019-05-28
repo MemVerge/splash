@@ -27,4 +27,5 @@ case class ShuffleSpillInfo(
     partitionLengths: Array[Long],
     file: TmpShuffleFile,
     blockId: TempShuffleBlockId) {
+  lazy val spillSize:Long = partitionLengths.sum
 }

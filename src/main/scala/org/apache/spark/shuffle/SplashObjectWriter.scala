@@ -61,7 +61,7 @@ private[spark] class SplashObjectWriter(
   private var countOs: CountingOutputStream = _
   private var bufferedOs: OutputStream = _
   private var objOs: SerializationStream = _
-  private var committedPosition = 0L
+  private[shuffle] var committedPosition = 0L
 
   private var numRecordsWritten = 0
 
