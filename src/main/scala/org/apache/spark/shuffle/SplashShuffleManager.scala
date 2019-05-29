@@ -74,6 +74,7 @@ class SplashShuffleManager(conf: SparkConf) extends ShuffleManager with Logging 
       handle: ShuffleHandle,
       mapId: Int,
       context: TaskContext): ShuffleWriter[K, V] = {
+    logDebug(s"get writer for shuffle ${handle.shuffleId} mapper $mapId.")
     numMapsForShuffle.putIfAbsent(
       handle.shuffleId,
       handle.asInstanceOf[BaseShuffleHandle[_, _, _]].numMaps)
@@ -109,6 +110,8 @@ class SplashShuffleManager(conf: SparkConf) extends ShuffleManager with Logging 
       startPartition: Int,
       endPartition: Int,
       context: TaskContext): ShuffleReader[K, C] = {
+    logDebug(s"get writer for shuffle ${handle.shuffleId} " +
+        s"partition $startPartition to $endPartition")
     new SplashShuffleReader(
       shuffleBlockResolver,
       handle.asInstanceOf[BaseShuffleHandle[K, _, C]],

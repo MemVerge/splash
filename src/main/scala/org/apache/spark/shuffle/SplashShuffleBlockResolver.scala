@@ -49,15 +49,8 @@ private[spark] class SplashShuffleBlockResolver(
 
   private val storageFactory: StorageFactory = StorageFactoryHolder.getFactory
 
-  private val lockMap = new ConcurrentHashMap[(Int, Int), Object]()
-
   private val shuffleTypeManager = ShuffleTypeManager(this)
 
-  private val lockSupplier = new java.util.function.Function[(Int, Int), Object]() {
-    override def apply(t: (Int, Int)): Object = new Object()
-  }
-
-  /** @inheritdoc */
   override def getBlockData(blockId: ShuffleBlockId): ManagedBuffer =
     throw new UnsupportedOperationException("Not used by Splash.")
 
@@ -108,7 +101,7 @@ private[spark] class SplashShuffleBlockResolver(
     getIndexFile(shuffleBlockId.shuffleId, shuffleBlockId.mapId)
   }
 
-  def getBlockData(blockId: BlockId): Option[InputStream] = {
+  def getBlockData(blockId: BlockId): Option[BlockDataStreamInfo] = {
     if (blockId.isShuffle) {
       val shuffleBlockId = blockId.asInstanceOf[ShuffleBlockId]
       if (shuffleTypeManager.isHashBasedShuffle(shuffleBlockId)) {
@@ -133,7 +126,8 @@ private[spark] class SplashShuffleBlockResolver(
       logPartitionMd5(dataFile)
     }
 
-    Some(new BufferedInputStream(dataIs, fileBufferSizeKB * 1024))
+    val stream = new BufferedInputStream(dataIs, fileBufferSizeKB * 1024)
+    Some(BlockDataStreamInfo(stream, dataFile.getSize))
   }
 
   private def readPartitionByIndex(blockId: BlockId, shuffleBlockId: ShuffleBlockId) = {
@@ -157,7 +151,8 @@ private[spark] class SplashShuffleBlockResolver(
           logPartitionMd5(dataFile, offset, nextOffset)
         }
 
-        Some(new BufferedInputStream(dataIs, fileBufferSizeKB * 1024))
+        val stream = new BufferedInputStream(dataIs, fileBufferSizeKB * 1024)
+        Some(BlockDataStreamInfo(stream, nextOffset - offset))
       }
     catch {
       case ex: IOException =>
@@ -207,7 +202,7 @@ private[spark] class SplashShuffleBlockResolver(
 
   def dump(blockId: BlockId): String = {
     val dumpFolder: String = getDumpFolder
-    val dumpFilePath = Paths.get(dumpFolder, s"${blockId.name}.dump")
+    val dumpFilePath = Paths.get(dumpFolder, s"$blockId.dump")
     val dumpFile = dumpFilePath.toFile
     if (dumpFile.exists()) {
       log.info(s"old dump file $dumpFilePath already exists, remove it first.")
@@ -217,7 +212,7 @@ private[spark] class SplashShuffleBlockResolver(
       new FileOutputStream(dumpFile)
     } { os =>
       getBlockData(blockId) match {
-        case Some(is) =>
+        case Some(BlockDataStreamInfo(is, _)) =>
           try {
             IOUtils.copy(is, os)
             log.info(s"dump ${blockId.name} to $dumpFilePath success.")
@@ -272,27 +267,15 @@ private[spark] class SplashShuffleBlockResolver(
       }
     }
 
-    var indexFileOpt: Option[ShuffleFile] = None
-    lockMap.computeIfAbsent((shuffleId, mapId), lockSupplier).synchronized {
-      // check data in the shuffle output that already exists
-      val existingLengths = checkIndexAndDataFile(shuffleId, mapId)
-      if (existingLengths != null) {
-        val blocks = lengths.length
-        System.arraycopy(existingLengths, 0, lengths, 0, blocks)
-        // data file is available and correct
-        dataTmp.recall()
-        indexTmp.recall()
-      } else {
-        dataTmp.commit()
-        indexFileOpt = Some(indexTmp.commit())
-        logDebug(s"commit shuffle index: " +
-            s"${indexTmp.getCommitTarget.getPath}, " +
-            s"size: ${indexTmp.getCommitTarget.getSize}")
-        if (log.isDebugEnabled()) {
-          // check data in the shuffle output we just committed
-          checkIndexAndDataFile(shuffleId, mapId)
-        }
-      }
+    logDebug(s"commit shuffle index ${indexTmp.getCommitTarget.getPath}.")
+    indexTmp.commit()
+
+    logDebug(s"commit shuffle data ${dataTmp.getCommitTarget.getPath}.")
+    dataTmp.commit()
+
+    if (log.isDebugEnabled()) {
+      // check data in the shuffle output we just committed
+      checkIndexAndDataFile(shuffleId, mapId)
     }
   }
 
@@ -313,7 +296,10 @@ private[spark] class SplashShuffleBlockResolver(
         throw e
     }
 
+    logDebug(s"write shuffle index ${indexFile.getCommitTarget.getPath}.")
     indexFile.commit()
+
+    logDebug(s"write shuffle data ${indexFile.getCommitTarget.getPath}.")
     dataFile.commit()
   }
 
@@ -323,28 +309,42 @@ private[spark] class SplashShuffleBlockResolver(
     var ret: Array[Long] = null
     // the index file should have `block + 1` longs as offset.
     try {
+      val offsets = readIndex(shuffleId, mapId)
+      if (offsets.nonEmpty) {
+        ret = validateData(offsets, data)
+      } else {
+        logDebug(s"offsets length is zero, ${index.getPath} is empty.")
+      }
+    } catch {
+      case ex: IOException =>
+        logWarning("check index and data file failed", ex)
+    }
+    ret
+  }
+
+  private[shuffle] def readIndex(shuffleId: Int, mapId: Int): Array[Long] = {
+    val index = getIndexFile(shuffleId, mapId)
+    try {
       SplashUtils.withResources(
         new DataInputStream(
           new BufferedInputStream(
             index.makeInputStream()))) { in =>
-        val numOfLong = index.getSize / 8
-        val offsets = 0L until numOfLong map { _ => in.readLong() }
 
-        if (offsets.nonEmpty) {
-          ret = validateData(offsets, data)
-        } else {
-          logDebug(s"offsets length is zero, ${index.getPath} is empty.")
-        }
+        Iterator.continually {
+          try {
+            in.readLong()
+          } catch {
+            case _: EOFException => -1
+          }
+        }.takeWhile(_ >= 0).toArray
       }
     } catch {
       case ex@(_: IllegalArgumentException |
                _: FileNotFoundException |
                _: IllegalStateException) =>
         logDebug(s"create input stream failed: ${ex.getMessage}")
-      case ex: IOException =>
-        logWarning("check index and data file failed", ex)
+        Array.emptyLongArray
     }
-    ret
   }
 
   private def validateData(offsets: IndexedSeq[Long], data: ShuffleFile): Array[Long] = {
@@ -388,7 +388,6 @@ private[spark] class SplashShuffleBlockResolver(
     }
   }
 
-  /** @inheritdoc */
   override def stop(): Unit = {}
 
   private[spark] def shuffleFolder = storageFactory.getShuffleFolder(appId)
@@ -431,3 +430,5 @@ case class ShuffleTypeManager(resolver: SplashShuffleBlockResolver)
     }
   }
 }
+
+case class BlockDataStreamInfo(is: InputStream, length: Long)
