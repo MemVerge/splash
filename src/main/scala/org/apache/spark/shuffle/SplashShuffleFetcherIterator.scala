@@ -55,7 +55,7 @@ private[spark] class SplashShuffleFetcherIterator(
       inputIterator.hasNext
     } catch {
       case e: Exception =>
-        log.error(s"error checking next value for ${currentBlockId.name}", e)
+        log.error(s"error checking next value for $currentBlockId", e)
         resolver.dump(currentBlockId)
         throw e
     }
@@ -73,22 +73,26 @@ private[spark] class SplashShuffleFetcherIterator(
   }
 
   def dump(): String = {
-    val size = resolver.getBlockData(currentBlockId).size
-    val offset = size - currentStream.available()
-    log.info(s"current block: $currentBlockId, size: $size, offset: $offset")
-    resolver.dump(currentBlockId)
+    resolver.getBlockData(currentBlockId) match {
+      case Some(BlockDataStreamInfo(_, length)) =>
+        val offset = length - currentStream.available()
+        logInfo(s"current block: $currentBlockId, size: $length, offset: $offset")
+        resolver.dump(currentBlockId)
+      case None =>
+        logInfo(s"current block: $currentBlockId not found")
+        ""
+    }
   }
 
   private def getInputs = {
     blockIds.flatMap { blockId =>
       try {
         resolver.getBlockData(blockId) match {
-          case Some(inputStream) =>
-            val length = inputStream.available()
+          case Some(BlockDataStreamInfo(inputStream, length)) =>
             logDebug(s"Read shuffle ${blockId.name}, length: $length")
             currentBlockId = blockId
             currentStream = inputStream
-            Some((blockId, inputStream, length))
+            Some((blockId, inputStream, length.intValue()))
           case None =>
             val msg = s"Failed to load block ${blockId.name}."
             logError(msg)

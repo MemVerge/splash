@@ -188,7 +188,10 @@ private[spark] class SplashUnsafeShuffleWriter[K, V](
       } else if (spills.length == 1) {
         // Here, we don't need to perform any metrics updates because the bytes written to this
         // output file would have already been counted as shuffle bytes written.
-        dataTmp.swap(spills(0).file)
+        val firstSpill = spills(0).file
+        logDebug(s"swap temp file, change ${firstSpill.uuid()}'s " +
+            s"target to ${dataTmp.getCommitTarget.getPath}")
+        dataTmp.swap(firstSpill)
         spills(0).partitionLengths
       } else {
         var partitionLengths: Array[Long] = null

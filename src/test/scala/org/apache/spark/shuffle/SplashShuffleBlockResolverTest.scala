@@ -88,7 +88,7 @@ class SplashShuffleBlockResolverTest {
     resolver.writeData(dataTmp1, new Array[Byte](30))
     resolver.writeIndexFileAndCommit(shuffleId, mapId, lengths1, dataTmp1)
 
-    // second write, ignore this because data already exists
+    // second write, overwrite first commit
     val dataTmp2 = resolver.getDataTmpFile(shuffleId, mapId)
     val lengths2 = new Array[Long](3)
 
@@ -96,7 +96,6 @@ class SplashShuffleBlockResolverTest {
     resolver.writeIndexFileAndCommit(shuffleId, mapId, lengths2, dataTmp2)
 
     var dataFile = resolver.getDataFile(shuffleId, mapId)
-    assertThat(lengths1.toSeq) isEqualTo lengths2.toSeq
     assertThat(dataFile.exists()) isTrue()
     assertThat(dataFile.getSize) isEqualTo 30
     assertThat(dataTmp2.exists()) isFalse()
@@ -213,5 +212,21 @@ class SplashShuffleBlockResolverTest {
     resolver.writeShuffle(shuffleId, mapId, indices, new Array[Byte](total))
     dumpFile = resolver.dump(ShuffleBlockId(shuffleId, mapId, 1))
     assertThat(new File(dumpFile).length()) isEqualTo 230
+  }
+
+  def testReadIndexFile(): Unit = {
+    val mapId = 11
+    val lengths = Array(10L, 0L, 20L, 12L)
+    val dataTmp = resolver.getDataTmpFile(shuffleId, mapId)
+    resolver.writeData(dataTmp, new Array[Byte](lengths.sum.intValue()))
+    resolver.writeIndexFileAndCommit(shuffleId, mapId, lengths, dataTmp)
+
+    val actual = resolver.readIndex(shuffleId, mapId)
+    assertThat(actual).containsExactly(0L, 10L, 10L, 30L, 42L)
+  }
+
+  def testReadIndexFileNotExists(): Unit = {
+    val actual = resolver.readIndex(shuffleId, mapId = 12)
+    assertThat(actual).isEmpty()
   }
 }
