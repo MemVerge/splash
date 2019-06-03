@@ -23,7 +23,6 @@ package org.apache.spark.shuffle
 import java.io._
 import java.nio.file.{FileAlreadyExistsException, Paths}
 import java.security.MessageDigest
-import java.util.concurrent.ConcurrentHashMap
 
 import com.memverge.splash.{ShuffleFile, StorageFactory, StorageFactoryHolder, TmpShuffleFile}
 import org.apache.commons.io.IOUtils
@@ -231,13 +230,22 @@ private[spark] class SplashShuffleBlockResolver(
   }
 
   private def createEmptyFile(tmpShuffleFile: TmpShuffleFile): Unit = {
-    try {
-      tmpShuffleFile.create()
-    } catch {
-      case ex: FileAlreadyExistsException =>
-        logDebug(s"${tmpShuffleFile.getPath} not found: ${ex.getMessage}")
-      case ex: IOException =>
-        logWarning("failed to create file", ex)
+    val maxTry = 3
+    var tryCount = 0
+    var success = false
+    while (tryCount < maxTry && !success) {
+      tryCount += 1
+      try {
+        tmpShuffleFile.create()
+        success = true
+      } catch {
+        case ex: FileAlreadyExistsException =>
+          logDebug(s"${tmpShuffleFile.getPath} exists, remove and recreate." +
+              s"err: ${ex.getMessage}")
+          if (tryCount == maxTry) throw ex else tmpShuffleFile.delete()
+        case ex: IOException =>
+          logWarning("failed to create file", ex)
+      }
     }
   }
 
