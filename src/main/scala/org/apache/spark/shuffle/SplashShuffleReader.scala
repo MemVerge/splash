@@ -20,117 +20,88 @@
  */
 package org.apache.spark.shuffle
 
-import java.io.IOException
-
 import org.apache.spark.internal.Logging
 import org.apache.spark.storage.BlockId
-import org.apache.spark.util.CompletionIterator
 import org.apache.spark.{InterruptibleIterator, MapOutputTracker, SparkEnv, TaskContext}
 
 /**
  * Fetches and reads the partitions in range [startPartition, endPartition)
  * from a shuffle by requesting them from storage.
  */
-private[spark] class SplashShuffleReader[K, C](
+private[spark] class SplashShuffleReader[K, V](
     resolver: SplashShuffleBlockResolver,
-    handle: BaseShuffleHandle[K, _, C],
+    handle: BaseShuffleHandle[K, _, V],
     startPartition: Int,
     endPartition: Int,
     context: TaskContext,
     mapOutputTracker: MapOutputTracker = SparkEnv.get.mapOutputTracker)
-    extends ShuffleReader[K, C] with Logging {
+    extends ShuffleReader[K, V] with Logging {
 
   private val dep = handle.dependency
 
-  /** @inheritdoc */
-  override def read(): Iterator[Product2[K, C]] = {
+  private type Pair = (Any, Any)
+  private type KCPair = (K, V)
+  private type KCIterator = Iterator[KCPair]
+
+  override def read(): KCIterator = {
     val shuffleBlocks = mapOutputTracker.getMapSizesByExecutorId(
       handle.shuffleId, startPartition, endPartition)
         .flatMap(_._2)
     readShuffleBlocks(shuffleBlocks)
   }
 
-  def readShuffleBlocks(shuffleBlocks: Seq[(BlockId, Long)]): Iterator[Product2[K, C]] =
+  def readShuffleBlocks(shuffleBlocks: Seq[(BlockId, Long)]): KCIterator =
     readShuffleBlocks(shuffleBlocks.iterator)
 
-  def readShuffleBlocks(shuffleBlocks: Iterator[(BlockId, Long)]): Iterator[Product2[K, C]] = {
-    val fetcherIterator = new SplashShuffleFetcherIterator(resolver, shuffleBlocks)
-
-    val readMetrics = context.taskMetrics().createTempShuffleReadMetrics()
+  def readShuffleBlocks(shuffleBlocks: Iterator[(BlockId, Long)]): KCIterator = {
+    val taskMetrics = context.taskMetrics()
     val serializer = SplashSerializer(dep)
 
-    val recordIter = fetcherIterator.flatMap { case (blockId, stream, length) =>
-      try {
-        readMetrics.incLocalBlocksFetched(1)
-        readMetrics.incLocalBytesRead(length)
-        serializer.deserializeStream(blockId, stream).asKeyValueIterator
-      } catch {
-        case ioe: IOException =>
-          logError(s"Failed to read ${blockId.name}")
-          resolver.dump(blockId)
-          throw ioe
+    val nonEmptyBlocks = shuffleBlocks.filter(_._2 > 0).map(_._1)
+    val fetcherIterator = SplashShuffleFetcherIterator(resolver, nonEmptyBlocks)
+
+    def getAggregatedIterator(iterator: Iterator[Pair]): KCIterator = {
+      dep.aggregator match {
+        case Some(agg) =>
+          val aggregator = new SplashAggregator(agg)
+          if (dep.mapSideCombine) {
+            // We are reading values that are already combined
+            val combinedKeyValuesIterator = iterator.asInstanceOf[Iterator[(K, V)]]
+            aggregator.combineCombinersByKey(combinedKeyValuesIterator, context)
+          } else {
+            // We don't know the value type, but also don't care -- the dependency *should*
+            // have made sure its compatible w/ this aggregator, which will convert the value
+            // type to the combined type C
+            val keyValuesIterator = iterator.asInstanceOf[Iterator[(K, Nothing)]]
+            aggregator.combineValuesByKey(keyValuesIterator, context)
+          }
+        case None =>
+          require(!dep.mapSideCombine, "Map-side combine without Aggregator specified!")
+          iterator.asInstanceOf[KCIterator]
       }
     }
 
-    def dumpCurrentPartitionOnError[T](f: () => T): T = {
-      try {
-        f()
-      } catch {
-        case e: Exception =>
-          log.error(s"dump current partition on error.", e)
-          fetcherIterator.dump()
-          throw e
+    def getSortedIterator(iterator: KCIterator): KCIterator = {
+      // Sort the output if there is a sort ordering defined.
+      dep.keyOrdering match {
+        case Some(keyOrd: Ordering[K]) =>
+          // Create an ExternalSorter to sort the data.
+          val sorter = new SplashSorter[K, V, V](
+            context, ordering = Some(keyOrd), serializer = serializer)
+          sorter.insertAll(iterator)
+          sorter.updateTaskMetrics()
+          sorter.completionIterator
+        case None =>
+          iterator
       }
     }
 
-    val metricIter = CompletionIterator[(Any, Any), Iterator[(Any, Any)]](
-      recordIter.map { record =>
-        readMetrics.incRecordsRead(1)
-        record
-      },
-      context.taskMetrics().mergeShuffleReadMetrics())
+    val metricIter = fetcherIterator.flatMap(
+      _.asMetricIterator(serializer, taskMetrics))
 
     // An interruptible iterator must be used here in order to support task cancellation
-    val interruptibleIter = new InterruptibleIterator[(Any, Any)](context, metricIter)
-
-    val aggregatedIter: Iterator[Product2[K, C]] = if (dep.aggregator.isDefined) {
-      val aggregator = dep.aggregator.map(new SplashAggregator(_)).get
-      if (dep.mapSideCombine) {
-        // We are reading values that are already combined
-        val combinedKeyValuesIterator = interruptibleIter.asInstanceOf[Iterator[(K, C)]]
-        aggregator.combineCombinersByKey(combinedKeyValuesIterator, context)
-      } else {
-        // We don't know the value type, but also don't care -- the dependency *should*
-        // have made sure its compatible w/ this aggregator, which will convert the value
-        // type to the combined type C
-        val keyValuesIterator = interruptibleIter.asInstanceOf[Iterator[(K, Nothing)]]
-
-        dumpCurrentPartitionOnError(() => {
-          aggregator.combineValuesByKey(keyValuesIterator, context)
-        })
-      }
-    } else {
-      require(!dep.mapSideCombine, "Map-side combine without Aggregator specified!")
-      interruptibleIter.asInstanceOf[Iterator[Product2[K, C]]]
-    }
-
-    // Sort the output if there is a sort ordering defined.
-    dep.keyOrdering match {
-      case Some(keyOrd: Ordering[K]) =>
-        // Create an ExternalSorter to sort the data.
-        val sorter =
-          new SplashSorter[K, C, C](context, ordering = Some(keyOrd), serializer = SplashSerializer(dep))
-
-        dumpCurrentPartitionOnError(() => {
-          sorter.insertAll(aggregatedIter)
-        })
-
-        context.taskMetrics().incMemoryBytesSpilled(sorter.memoryBytesSpilled)
-        context.taskMetrics().incDiskBytesSpilled(sorter.bytesSpilled)
-        context.taskMetrics().incPeakExecutionMemory(sorter.peakMemoryUsedBytes)
-        CompletionIterator[Product2[K, C], Iterator[Product2[K, C]]](sorter.iterator, sorter.stop())
-      case None =>
-        aggregatedIter
-    }
+    getSortedIterator(
+      getAggregatedIterator(
+        new InterruptibleIterator[Pair](context, metricIter)))
   }
 }

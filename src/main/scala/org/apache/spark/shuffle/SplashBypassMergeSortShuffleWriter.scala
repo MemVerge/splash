@@ -39,8 +39,6 @@ private[spark] class SplashBypassMergeSortShuffleWriter[K, V](
   private val numPartitions = partitioner.numPartitions
   private val shuffleId = dep.shuffleId
   private val writeMetrics = taskContext.taskMetrics().shuffleWriteMetrics
-  private val conf = SparkEnv.get.conf
-  private val fileBufferSize = conf.get(SplashOpts.shuffleFileBufferKB).toInt * 1024
 
   private var partitionWriters: Array[SplashObjectWriter] = _
   private val partitionLengths: Array[Long] = Array.fill(numPartitions)(0L)
@@ -59,7 +57,6 @@ private[spark] class SplashBypassMergeSortShuffleWriter[K, V](
           blockId,
           tmpDataFile,
           serializer,
-          fileBufferSize,
           writeMetrics,
           noEmptyFile = noEmptyFile)
       })

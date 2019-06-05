@@ -51,6 +51,7 @@ class SplashAppendOnlyMapTest {
 
   @BeforeMethod
   def beforeMethod(): Unit = {
+    afterMethod()
     context = TestUtil.newTaskContext(sc.conf)
   }
 
@@ -265,7 +266,7 @@ class SplashAppendOnlyMapTest {
     val consumer = createMap[String]
     map.insertAll((1 to rddSize).iterator.map(_.toString).map(i => (i, i)))
     assertThat(map.spill(10000, consumer)) isGreaterThan 0L
-    assertThat(map.bytesSpilled) isEqualTo 8580L
+    assertThat(map.bytesSpilled) isEqualTo 34861L
     map.cleanupSpillFile()
     consumer.cleanupSpillFile()
   }
@@ -298,7 +299,7 @@ class SplashAppendOnlyMapTest {
       map.insert(w1, w2)
       map.insert(w2, w1)
     }
-    assertThat(SplashAppendOnlyMap.spilledCount) isGreaterThan 0
+    assertThat(map.spillCount) isGreaterThan 0
 
     // A map of collision pairs in both directions
     val collisionPairsMap = (collisionPairs ++ collisionPairs.map(_.swap)).toMap
@@ -328,7 +329,7 @@ class SplashAppendOnlyMapTest {
       }
     }
 
-    assertThat(SplashAppendOnlyMap.spilledCount) isGreaterThan 0
+    assertThat(map.spillCount) isGreaterThan 0
 
     val it = map.iterator
     var count = 0

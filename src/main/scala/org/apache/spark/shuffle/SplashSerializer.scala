@@ -20,20 +20,19 @@
  */
 package org.apache.spark.shuffle
 
-import java.io.{BufferedInputStream, InputStream, OutputStream}
+import java.io.{InputStream, OutputStream}
 
 import com.memverge.splash.TmpShuffleFile
 import org.apache.spark.io.CompressionCodec
 import org.apache.spark.serializer._
 import org.apache.spark.storage.{BlockId, TempLocalBlockId}
-import org.apache.spark.{ShuffleDependency, SparkEnv}
+import org.apache.spark.{ShuffleDependency, SparkConf, SparkEnv}
 
 
 class SplashSerializer(
     serializerManagerOpt: Option[SerializerManager] = None,
     serializerInstanceOpt: Option[SerializerInstance] = None) {
   private lazy val sparkEnv = SparkEnv.get
-  private lazy val fileBufferSize = getFileBufferSize
   private lazy val compressCodec = getCompressCodec
 
   def wrap(blockId: BlockId, outputStream: OutputStream): OutputStream = {
@@ -87,8 +86,7 @@ class SplashSerializer(
 
   def deserializeStream(tmpFile: TmpShuffleFile): DeserializationStream = {
     val blockId = TempLocalBlockId(tmpFile.uuid())
-    val inputStream = tmpFile.makeInputStream
-    val bufferedIs = new BufferedInputStream(inputStream, fileBufferSize)
+    val bufferedIs = tmpFile.makeBufferedInputStream()
     deserializeStream(blockId, bufferedIs)
   }
 
@@ -134,14 +132,6 @@ class SplashSerializer(
     }
   }
 
-  private def getFileBufferSize = {
-    if (sparkEnv != null) {
-      sparkEnv.conf.get(SplashOpts.shuffleFileBufferKB).toInt * 1024
-    } else {
-      SplashOpts.shuffleFileBufferKB.defaultValue.get.toInt
-    }
-  }
-
   private def isCompressEnabled = {
     if (sparkEnv != null) {
       sparkEnv.conf.get(SplashOpts.shuffleCompress)
@@ -164,6 +154,12 @@ object SplashSerializer {
   def defaultSerializer(): SplashSerializer = {
     SplashSerializer(SparkEnv.get.serializerManager,
       SparkEnv.get.serializer.newInstance())
+  }
+
+  def kryo(conf: SparkConf): SplashSerializer = {
+    val kryoSerializer = new KryoSerializer(conf)
+    val serializerManager = new SerializerManager(kryoSerializer, conf)
+    SplashSerializer(serializerManager, kryoSerializer.newInstance())
   }
 
   def apply(serializerManager: SerializerManager,

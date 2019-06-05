@@ -99,10 +99,11 @@ object TestUtil {
       .set("spark.ui.enabled", "false")
       .set("spark.shuffle.manager", classOf[SplashShuffleManager].getName)
       .set("spark.hadoop.validateOutputSpecs", "false")
-      .set("spark.shuffle.compress", "true")
-      .set("spark.shuffle.spill.batchSize", "10")
+      .set(SplashOpts.shuffleCompress, true)
+      .set(SplashOpts.serializeBatchSize, 10L)
       .set("spark.shuffle.spill.initialMemoryThreshold", "512")
-      .set("spark.shuffle.sort.bypassMergeThreshold", "0")
+      .set(SplashOpts.bypassSortThreshold, 0)
+      .set(SplashOpts.spillCheckInterval, 1)
       .set("splash.local.internal.alwaysRemote", "false")
 
   def hashBasedConf(conf: SparkConf): SparkConf =
@@ -131,8 +132,7 @@ object TestUtil {
       aggregator,
       partitioner,
       ordering,
-      SplashSerializer(new JavaSerializer(conf))
-    )
+      SplashSerializer(new JavaSerializer(conf)))
   }
 
   def newSparkContext(conf: SparkConf): SparkContext = {
@@ -190,9 +190,10 @@ object TestUtil {
   def confWithStorageFactory(factoryName: String): SparkConf =
     confWithKryo.set("spark.shuffle.splash.storageFactory", factoryName)
 
-  def getSparkConfArray: Array[SparkConf] = {
-    Array(confWithKryo, confWithoutKryo)
-  }
+  def getSparkConfArray: Array[SparkConf] = Array(confWithKryo, confWithoutKryo)
+
+  def kryoSerializer: SplashSerializer =
+    SplashSerializer.kryo(TestUtil.confWithKryo)
 
   def time[R](block: => Unit)(implicit repeats: Int = 1): Unit = {
     val timeInMillis = (0 to repeats).map { i =>

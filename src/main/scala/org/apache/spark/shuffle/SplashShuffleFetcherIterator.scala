@@ -22,8 +22,11 @@ package org.apache.spark.shuffle
 
 import java.io.{FileNotFoundException, InputStream}
 
+import org.apache.spark.executor.TaskMetrics
 import org.apache.spark.internal.Logging
+import org.apache.spark.serializer.DeserializationStream
 import org.apache.spark.storage.BlockId
+import org.apache.spark.util.CompletionIterator
 
 /**
  * An iterator that fetches blocks from storage.
@@ -33,78 +36,122 @@ import org.apache.spark.storage.BlockId
  *
  * @param resolver      block resolver of the shuffle
  * @param shuffleBlocks list of blocks to fetch.
- *                      For each block we also require the size (in bytes as a long field) in
- *                      order to filter zero blocks
  */
-private[spark] class SplashShuffleFetcherIterator(
+private[spark] case class SplashShuffleFetcherIterator(
     resolver: SplashShuffleBlockResolver,
-    shuffleBlocks: Iterator[(BlockId, Long)])
-    extends Iterator[(BlockId, InputStream, Int)] with Logging {
+    shuffleBlocks: Iterator[BlockId])
+    extends Iterator[SplashShuffleFetcher] with Logging {
+  require(shuffleBlocks != null)
+  require(shuffleBlocks != null)
 
-  private val blockIds = shuffleBlocks
-      .filter(_._2 > 0) // only retrieve blocks not empty
-      .map(_._1)
-
-  private var currentBlockId: BlockId = _
-  private var currentStream: InputStream = _
-
-  private val inputIterator = getInputs
-
-  override def hasNext: Boolean = {
+  private lazy val inputIterator = shuffleBlocks.flatMap { blockId =>
     try {
-      inputIterator.hasNext
-    } catch {
-      case e: Exception =>
-        log.error(s"error checking next value for $currentBlockId", e)
-        resolver.dump(currentBlockId)
-        throw e
-    }
-  }
-
-  override def next(): (BlockId, InputStream, Int) = {
-    try {
-      inputIterator.next()
-    } catch {
-      case e: Exception =>
-        log.error(s"error getting next value of ${currentBlockId.name}", e)
-        dump()
-        throw e
-    }
-  }
-
-  def dump(): String = {
-    resolver.getBlockData(currentBlockId) match {
-      case Some(BlockDataStreamInfo(_, length)) =>
-        val offset = length - currentStream.available()
-        logInfo(s"current block: $currentBlockId, size: $length, offset: $offset")
-        resolver.dump(currentBlockId)
-      case None =>
-        logInfo(s"current block: $currentBlockId not found")
-        ""
-    }
-  }
-
-  private def getInputs = {
-    blockIds.flatMap { blockId =>
-      try {
-        resolver.getBlockData(blockId) match {
-          case Some(BlockDataStreamInfo(inputStream, length)) =>
-            logDebug(s"Read shuffle ${blockId.name}, length: $length")
-            currentBlockId = blockId
-            currentStream = inputStream
-            Some((blockId, inputStream, length.intValue()))
-          case None =>
-            val msg = s"Failed to load block ${blockId.name}."
-            logError(msg)
-            throw new FileNotFoundException(msg)
-        }
-      } catch {
-        case e: Exception =>
-          val msg = s"Failed to get block ${blockId.name}, which is not a " +
-              s"shuffle block.  Skip $blockId."
-          logError(msg, e)
-          None
+      resolver.getBlockData(blockId) match {
+        case Some(BlockDataStreamInfo(inputStream, length)) =>
+          logDebug(s"Read shuffle $blockId, length: $length, " +
+              s"open stream: $inputStream")
+          Some(FetcherImpl(blockId, inputStream, length.intValue))
+        case None =>
+          throw new FileNotFoundException(s"Failed to load block $blockId.")
       }
+    } catch {
+      case e: Exception =>
+        val msg = s"Failed to get block $blockId, which may not be a " +
+            s"shuffle block.  Skip it."
+        logError(msg, e)
+        None
     }
+  }
+
+  override def hasNext: Boolean = inputIterator.hasNext
+
+  override def next(): SplashShuffleFetcher = inputIterator.next()
+
+  private case class FetcherImpl(
+      blockId: BlockId,
+      stream: InputStream,
+      length: Int) extends SplashShuffleFetcher with Logging {
+    private def deserializeStream(
+        serializer: SplashSerializer): DeserializationStream =
+      serializer.deserializeStream(blockId, stream)
+
+    private def asKeyValueIterator(serializer: SplashSerializer): PairIterator =
+      deserializeStream(serializer).asKeyValueIterator
+
+    def asMetricIterator(
+        serializer: SplashSerializer,
+        taskMetrics: TaskMetrics): CompletionIterator[Pair, PairIterator] = {
+      val readMetrics = taskMetrics.createTempShuffleReadMetrics()
+      readMetrics.incLocalBlocksFetched(1)
+      readMetrics.incLocalBytesRead(length)
+
+      val keyValueIterator = asKeyValueIterator(serializer)
+
+      val dumpIterator = IteratorOnErrorWrapper(keyValueIterator,
+        () => {
+          logInfo(s"error in block: $blockId, size: $length, offset: $offset")
+          resolver.dump(blockId)
+          close()
+        })
+
+      CompletionIterator[Pair, PairIterator](
+        dumpIterator.map { record =>
+          readMetrics.incRecordsRead(1)
+          record
+        }, {
+          close()
+          taskMetrics.mergeShuffleReadMetrics()
+        })
+    }
+
+    def close(): Unit = {
+      logDebug(s"close stream $stream")
+      stream.close()
+    }
+
+    def offset: Int = length - stream.available()
+  }
+
+}
+
+
+trait SplashShuffleFetcher {
+  type Pair = (_, _)
+  type PairIterator = Iterator[Pair]
+
+  def blockId: BlockId
+
+  def stream: InputStream
+
+  def length: Int
+
+  def offset: Int
+
+  def close(): Unit
+
+  def asMetricIterator(
+      serializer: SplashSerializer,
+      taskMetrics: TaskMetrics): CompletionIterator[Pair, PairIterator]
+}
+
+
+case class IteratorOnErrorWrapper[+A](sub: Iterator[A], f: () => Unit)
+    extends Iterator[A] with Logging {
+  def next(): A = try {
+    sub.next()
+  } catch {
+    case e: Exception =>
+      logError(s"error during iterator.next, ${e.getMessage}")
+      f()
+      throw e
+  }
+
+  def hasNext: Boolean = try {
+    sub.hasNext
+  } catch {
+    case e: Exception =>
+      logError(s"error during iterator.hasNext, ${e.getMessage}")
+      f()
+      throw e
   }
 }

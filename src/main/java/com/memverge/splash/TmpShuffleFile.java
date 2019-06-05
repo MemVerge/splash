@@ -15,9 +15,12 @@
  */
 package com.memverge.splash;
 
+import java.io.BufferedOutputStream;
+import java.io.DataOutputStream;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.util.UUID;
+import org.apache.spark.executor.ShuffleWriteMetrics;
 
 public interface TmpShuffleFile extends ShuffleFile {
 
@@ -38,4 +41,23 @@ public interface TmpShuffleFile extends ShuffleFile {
   UUID uuid();
 
   OutputStream makeOutputStream();
+
+  default BufferedOutputStream makeBufferedOutputStream() {
+    return new BufferedOutputStream(
+        makeOutputStream(),
+        StorageFactoryHolder.getBufferSize());
+  }
+
+  default DataOutputStream makeBufferedDataOutputStream() {
+    return new DataOutputStream(makeBufferedOutputStream());
+  }
+
+  default ManualCloseOutputStream makeBufferedManualCloseOutputStream(
+      ShuffleWriteMetrics metrics) {
+    return new ManualCloseOutputStream(makeBufferedOutputStream(), metrics);
+  }
+
+  default ManualCloseOutputStream makeBufferedManualCloseOutputStream() {
+    return makeBufferedManualCloseOutputStream(null);
+  }
 }

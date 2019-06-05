@@ -34,6 +34,16 @@ public class StorageFactoryHolder {
     return INSTANCE.getRealFactory();
   }
 
+  public static void setBufferSize(int size) {
+    INSTANCE.bufferSize = size;
+  }
+
+  static int getBufferSize() {
+    return INSTANCE.bufferSize;
+  }
+
+  private int bufferSize = 32 * 1024;
+
   private SparkConf conf = null;
 
   public static void setSparkConf(SparkConf sparkConf) {

@@ -42,16 +42,12 @@ private[spark] class SplashUnsafeShuffleWriter[K, V](
     context: TaskContext,
     serializer: SplashSerializer)
     extends ShuffleWriter[K, V] with Logging {
-
   private val conf = SparkEnv.get.conf
   private val writeMetrics = context.taskMetrics().shuffleWriteMetrics
 
   private val dep = handle.dependency
   private val partitioner = dep.partitioner
   private val shuffleId = dep.shuffleId
-
-  private val fileBufferSize = conf.get(
-    SplashOpts.shuffleFileBufferKB).toInt * 1024
 
   private var peakMemoryUsedBytes = 0L
   private var stopping = false
@@ -220,15 +216,13 @@ private[spark] class SplashUnsafeShuffleWriter[K, V](
     val numPartitions = partitioner.numPartitions
     val partitionLengths = new Array[Long](numPartitions)
 
-    val mergedOs = new CountingOutputStream(
-      new BufferedOutputStream(tmpData.makeOutputStream(), fileBufferSize))
+    val mergedOs = new CountingOutputStream(tmpData.makeBufferedOutputStream())
 
     var threwException = true
     var spillIss: Seq[InputStream] = Seq.empty
     try {
       spillIss = spills.indices.map { i =>
-        new BufferedInputStream(
-          spills(i).file.makeInputStream(), fileBufferSize)
+        spills(i).file.makeBufferedInputStream()
       }
       (0 until numPartitions).foreach { partition =>
         val initialFileLength = mergedOs.getByteCount

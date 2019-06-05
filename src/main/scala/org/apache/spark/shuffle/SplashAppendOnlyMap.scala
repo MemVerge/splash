@@ -21,15 +21,11 @@
 
 package org.apache.spark.shuffle
 
-import java.io.EOFException
-
-import com.memverge.splash.{StorageFactoryHolder, TmpShuffleFile}
-import org.apache.spark.executor.ShuffleWriteMetrics
+import org.apache.spark.TaskContext
 import org.apache.spark.internal.Logging
-import org.apache.spark.storage.{BlockManager, TempLocalBlockId}
+import org.apache.spark.storage.BlockManager
 import org.apache.spark.util.CompletionIterator
 import org.apache.spark.util.collection.{SizeTracker, SizeTrackingAppendOnlyMap, Spillable}
-import org.apache.spark.{SparkEnv, TaskContext}
 
 import scala.collection.mutable.ArrayBuffer
 import scala.collection.{BufferedIterator, mutable}
@@ -73,19 +69,17 @@ private[spark] class SplashAppendOnlyMap[K, V, C](
 
   @volatile private var currentMap = new SizeTrackingAppendOnlyMap[K, C]
 
-  private val storageFactory = StorageFactoryHolder.getFactory
+  private val spilledMaps = new ArrayBuffer[PairSpillReader[K, C]]
 
-  private val spilledMaps = new ArrayBuffer[MapIterator]
-  private val conf = SparkEnv.get.conf
-
-  private var _bytesSpilled = 0L
   private var _peakMemoryUsedBytes: Long = 0L
+
+  private val spills = new ArrayBuffer[SpilledFile]()
+
+  def spillCount: Int = spills.size
 
   def peakMemoryUsedBytes: Long = _peakMemoryUsedBytes
 
-  def bytesSpilled: Long = _bytesSpilled
-
-  private val fileBufferSize = conf.get(SplashOpts.shuffleFileBufferKB).toInt * 1024
+  def bytesSpilled: Long = spills.map(_.bytesSpilled).sum
 
   private val keyComparator = new SplashHashComparator[K]
   private var isHugeValueBuffer = false
@@ -126,7 +120,7 @@ private[spark] class SplashAppendOnlyMap[K, V, C](
       }
       val newValue = currentMap.changeValue(curEntry._1, update)
       addElementsRead()
-      if (elementsRead % 10000 == 0) {
+      if (elementsRead % 1000000 == 0) {
         newValue match {
           case s: Seq[_] =>
             isHugeValueBuffer = s.size > 10000000
@@ -145,11 +139,10 @@ private[spark] class SplashAppendOnlyMap[K, V, C](
 
   override protected[this] def spill(collection: SizeTracker): Unit = {
     val inMemoryIterator = currentMap.destructiveSortedIterator(keyComparator)
-    val spillFile = spillInMemoryIterator(inMemoryIterator).file
-    val mapIterator = new MapIterator(spillFile)
+    val spillFile = spillInMemoryIterator(inMemoryIterator)
+    val mapIterator = new PairSpillReader[K, C](spillFile, serializer)
     spilledMaps += mapIterator
     isHugeValueBuffer = false
-    SplashAppendOnlyMap.spilledCount += 1
   }
 
   override protected[this] def forceSpill(): Boolean = {
@@ -296,86 +289,16 @@ private[spark] class SplashAppendOnlyMap[K, V, C](
     }
   }
 
-  private class MapIterator(tmpFile: TmpShuffleFile) extends Iterator[(K, C)] {
-    private var nextItem: (K, C) = _
-    private var objectsRead = 0
+  private def getNextUpstream(spilledFile: SpilledFile): Iterator[(K, C)] =
+    new PairSpillReader(spilledFile, serializer)
 
-    private val deserializeStream = serializer.deserializeStream(tmpFile)
-
-    private def readNextItem(): (K, C) = {
-      try {
-        val k = deserializeStream.readKey().asInstanceOf[K]
-        val c = deserializeStream.readValue().asInstanceOf[C]
-        objectsRead += 1
-        (k, c)
-      } catch {
-        case _: EOFException | _: NullPointerException =>
-          cleanup()
-          null
-      }
-    }
-
-    override def hasNext: Boolean = {
-      if (nextItem == null) {
-        nextItem = readNextItem()
-      }
-      nextItem != null
-    }
-
-    override def next(): (K, C) = {
-      if (!hasNext) {
-        throw new NoSuchElementException
-      }
-      val item = nextItem
-      nextItem = null
-      item
-    }
-
-    def cleanup(): Unit = {
-      deserializeStream.close()
-      tmpFile.recall()
-    }
-
-    context.addTaskCompletionListener(_ => cleanup())
+  private def spillInMemoryIterator(iterator: Iterator[(K, C)]): SpilledFile = {
+    val spilledFile = SpilledFile.spill(iterator, serializer)
+    SplashAppendOnlyMap.spilledCount += 1
+    spills += spilledFile
+    spilledFile
   }
 
-  private def getNextUpstream(spilledFile: SpilledFile): Iterator[(K, C)] = {
-    new MapIterator(spilledFile.file)
-  }
-
-  private def spillInMemoryIterator(inMemoryIterator: Iterator[(K, C)]): SpilledFile = {
-
-    val spillTmpFile = storageFactory.makeSpillFile()
-    val blockId = TempLocalBlockId(spillTmpFile.uuid())
-    val spillMetrics: ShuffleWriteMetrics = new ShuffleWriteMetrics
-    val writer = new SplashObjectWriter(
-      blockId,
-      spillTmpFile,
-      serializer,
-      fileBufferSize,
-      spillMetrics)
-
-    var objectsWritten = 0
-
-    var success = false
-    try {
-      while (inMemoryIterator.hasNext) {
-        val kv = inMemoryIterator.next()
-        writer.write(kv)
-        objectsWritten += 1
-      }
-      writer.close()
-      _bytesSpilled += writer.committedPosition
-      success = true
-    } finally {
-      if (!success || objectsWritten == 0) {
-        writer.revertPartialWritesAndClose()
-        spillTmpFile.recall()
-      }
-    }
-
-    SpilledFile(spillTmpFile, blockId, success)
-  }
 
   def destructiveIterator(inMemoryIterator: Iterator[(K, C)]): Iterator[(K, C)] = {
     readingIterator = new SplashSpillableIterator[(K, C)](

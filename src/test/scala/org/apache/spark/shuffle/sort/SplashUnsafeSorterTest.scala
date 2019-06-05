@@ -26,6 +26,8 @@ import org.apache.spark.{SparkConf, SparkContext}
 import org.assertj.core.api.Assertions.assertThat
 import org.testng.annotations.{AfterMethod, DataProvider, Test}
 
+import scala.collection.mutable
+
 @Test(groups = Array("UnitTest", "IntegrationTest"))
 class SplashUnsafeSorterTest {
   private var sc: SparkContext = _
