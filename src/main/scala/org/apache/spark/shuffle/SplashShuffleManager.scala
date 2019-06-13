@@ -138,10 +138,15 @@ class SplashShuffleManager(conf: SparkConf) extends ShuffleManager with Logging 
   /** Shut down this ShuffleManager. */
   override def stop(): Unit = {
     StorageFactoryHolder.onApplicationEnd()
-    if (isDriver && conf.get(SplashOpts.clearShuffleOutput)) {
-      shuffleBlockResolver.cleanup()
+    if (conf.contains("spark.app.id")) {
+      logInfo(s"stop shuffle manager for app ${conf.getAppId}")
+      if (isDriver && conf.get(SplashOpts.clearShuffleOutput)) {
+        shuffleBlockResolver.cleanup()
+      }
+      shuffleBlockResolver.stop()
+    } else {
+      logInfo("app id is not available, app may not start yet.")
     }
-    shuffleBlockResolver.stop()
   }
 
   private def isDriver = {

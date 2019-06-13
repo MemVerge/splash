@@ -21,12 +21,23 @@
 package org.apache.spark.shuffle
 
 import org.assertj.core.api.Assertions.assertThat
+import org.assertj.core.api.Fail.fail
 import org.testng.annotations.Test
 
 @Test(groups = Array("UnitTest"))
 class SplashShuffleManagerTest {
   def testVersion(): Unit = {
     val version = SplashShuffleManager.version
-    assertThat(version).matches("\\d+\\.\\d+\\.\\d+")
+    assertThat(version).matches("\\d+\\.\\d+(\\.\\d+)+")
+  }
+
+  def testStopWithoutApp(): Unit = {
+    val shuffleManager = new SplashShuffleManager(TestUtil.confWithKryo)
+    try {
+      shuffleManager.stop()
+    } catch {
+      case e: Exception =>
+        fail(s"should not raise exception", e)
+    }
   }
 }
