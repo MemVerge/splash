@@ -43,16 +43,12 @@ private[spark] class SplashBypassMergeSortShuffleWriter[K, V](
   private val fileBufferSize = conf.get(SplashOpts.shuffleFileBufferKB).toInt * 1024
 
   private var partitionWriters: Array[SplashObjectWriter] = _
-  private var partitionLengths: Array[Long] = _
-  private var mapStatus: MapStatus = _
+  private val partitionLengths: Array[Long] = Array.fill(numPartitions)(0L)
   private var stopping = false
 
   override def write(records: Iterator[Product2[K, V]]): Unit = {
     require(partitionWriters == null)
-    partitionLengths = Array.fill(numPartitions)(0L)
-    if (!records.hasNext) {
-      mapStatus = MapStatus(resolver.blockManagerId, partitionLengths)
-    } else {
+    if (records.hasNext) {
       val serializer = SplashSerializer(dep)
       val start = System.nanoTime()
       partitionWriters = new Array[SplashObjectWriter](numPartitions)
@@ -106,7 +102,6 @@ private[spark] class SplashBypassMergeSortShuffleWriter[K, V](
           })
       }
     }
-    mapStatus = MapStatus(resolver.blockManagerId, partitionLengths)
   }
 
   private[spark] def getPartitionLengths = partitionLengths
@@ -117,11 +112,7 @@ private[spark] class SplashBypassMergeSortShuffleWriter[K, V](
     } else {
       stopping = true
       if (success) {
-        if (mapStatus == null) {
-          throw new IllegalStateException(
-            "Cannot call stop(true) without having called write()")
-        }
-        Option(mapStatus)
+        Some(MapStatus(resolver.blockManagerId, partitionLengths))
       } else {
         if (partitionWriters != null) {
           try {

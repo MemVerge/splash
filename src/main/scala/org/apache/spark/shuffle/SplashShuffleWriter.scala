@@ -41,9 +41,7 @@ private[spark] class SplashShuffleWriter[K, V, C](
 
   private var stopping = false
 
-  private var mapStatus: MapStatus = _
-
-  private var partitionLengths: Array[Long] = _
+  private var partitionLengths: Array[Long] = Array.emptyLongArray
 
   private val writeMetrics = if (context != null) {
     context.taskMetrics().shuffleWriteMetrics
@@ -84,7 +82,6 @@ private[spark] class SplashShuffleWriter[K, V, C](
       val blockId = ShuffleBlockId(dep.shuffleId, mapId, resolver.NOOP_REDUCE_ID)
       partitionLengths = sorter.writePartitionedFile(blockId, tmp)
       resolver.writeIndexFileAndCommit(dep.shuffleId, mapId, partitionLengths, tmp)
-      mapStatus = MapStatus(resolver.blockManagerId, partitionLengths)
       val milliSeconds = (System.nanoTime() - start) / 1e6
       logDebug(s"mapper $mapId wrote ${partitionLengths.sum} bytes to " +
           s"${blockId.name} in $milliSeconds milli-seconds.")
@@ -103,7 +100,7 @@ private[spark] class SplashShuffleWriter[K, V, C](
       } else {
         stopping = true
         if (success) {
-          Option(mapStatus)
+          Option(MapStatus(resolver.blockManagerId, partitionLengths))
         } else {
           None
         }

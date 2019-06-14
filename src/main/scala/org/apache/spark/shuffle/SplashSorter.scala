@@ -32,7 +32,6 @@ import org.apache.spark.serializer.DeserializationStream
 import org.apache.spark.storage.{BlockId, TempShuffleBlockId}
 import org.apache.spark.util.collection._
 
-import scala.collection.mutable
 import scala.collection.mutable.ArrayBuffer
 
 private[spark] class SplashSorter[K, V, C](
@@ -271,29 +270,13 @@ private[spark] class SplashSorter[K, V, C](
 
   private def mergeSort(
       iterators: Seq[KCIterator],
-      comparator: Comparator[K]): Iterator[Product2[K, C]] = {
-    val bufferedIters = iterators.filter(_.hasNext).map(_.buffered)
-    val heap = new mutable.PriorityQueue[KCBufferedIterator]()(new Ordering[KCBufferedIterator] {
-      // Use the reverse of comparator.compare because PriorityQueue dequeues the max
-      override def compare(x: KCBufferedIterator, y: KCBufferedIterator): Int =
-        -comparator.compare(x.head._1, y.head._1)
-    })
-    heap.enqueue(bufferedIters: _*) // Will contain only the iterators with hasNext = true
-    new KCIterator {
-      override def hasNext: Boolean = heap.nonEmpty
-
-      override def next(): Product2[K, C] = {
-        if (!hasNext) {
-          throw new NoSuchElementException
-        }
-        val firstBuf = heap.dequeue()
-        val firstPair = firstBuf.next()
-        if (firstBuf.hasNext) {
-          heap.enqueue(firstBuf)
-        }
-        firstPair
-      }
-    }
+      comparator: Comparator[K]): KCIterator = {
+    Algorithm.mergeSort[Product2[K, C]](
+      iterators,
+      new Ordering[Product2[K, C]] {
+        override def compare(x: Product2[K, C], y: Product2[K, C]): Int =
+          comparator.compare(x._1, y._1)
+      })
   }
 
   private def mergeWithAggregation(

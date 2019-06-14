@@ -193,6 +193,29 @@ object TestUtil {
   def getSparkConfArray: Array[SparkConf] = {
     Array(confWithKryo, confWithoutKryo)
   }
+
+  def time[R](block: => Unit)(implicit repeats: Int = 1): Unit = {
+    val timeInMillis = (0 to repeats).map { i =>
+      val t0 = System.nanoTime()
+      block
+      val t1 = System.nanoTime()
+      val millis = (t1 - t0) / 1000 / 1000
+      println(s"Run $i Elapsed time: $millis ms")
+      millis
+    }.tail
+    logSummary(timeInMillis)
+  }
+
+  private def logSummary(timeInMillis: Seq[Long]): Unit = {
+    val length = timeInMillis.size
+    val total = timeInMillis.sum
+    println(s"Summary: " +
+        s"runs: $length, " +
+        s"avg: ${total / length}, " +
+        s"max: ${timeInMillis.max}, " +
+        s"min: ${timeInMillis.min}, " +
+        s"sum: $total")
+  }
 }
 
 /**
