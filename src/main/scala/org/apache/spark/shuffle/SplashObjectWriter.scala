@@ -20,57 +20,45 @@
  */
 package org.apache.spark.shuffle
 
-import java.io.{BufferedOutputStream, OutputStream}
+import java.io.OutputStream
 
 import com.memverge.splash.{ShuffleFile, TmpShuffleFile}
-import org.apache.commons.io.output.CountingOutputStream
 import org.apache.spark.executor.ShuffleWriteMetrics
 import org.apache.spark.internal.Logging
 import org.apache.spark.serializer.SerializationStream
-import org.apache.spark.storage.{BlockId, TimeTrackingOutputStream}
+import org.apache.spark.storage.BlockId
 import org.apache.spark.util.Utils
 
-private class ManualCloseOutputStream(out: OutputStream, bufferSize: Int)
-    extends BufferedOutputStream(out, bufferSize) {
-  private var closed = false
+import scala.collection.mutable.ArrayBuffer
 
-  def hasBeenClosed: Boolean = closed
-
-  override def close(): Unit = super.flush()
-
-  override def flush(): Unit = {}
-
-  def manualClose(): Unit = {
-    super.close()
-    closed = true
-  }
-}
 
 private[spark] class SplashObjectWriter(
     blockId: BlockId,
     val file: TmpShuffleFile,
     splashSerializer: SplashSerializer = SplashSerializer(),
-    bufferSize: Int = 32 * 1024,
     writeMetrics: ShuffleWriteMetrics = new ShuffleWriteMetrics(),
     noEmptyFile: Boolean = false)
     extends OutputStream with Logging {
 
-  private var initialized = false
+  private lazy val mcs = file.makeBufferedManualCloseOutputStream(writeMetrics)
 
-  private val mcs: ManualCloseOutputStream = initialize()
-  private var countOs: CountingOutputStream = _
   private var bufferedOs: OutputStream = _
   private var objOs: SerializationStream = _
-  private[shuffle] var committedPosition = 0L
 
-  private var numRecordsWritten = 0
+  val committedPositions: ArrayBuffer[Long] = ArrayBuffer[Long](0)
 
-  private def initialize(): ManualCloseOutputStream = {
-    countOs = new CountingOutputStream(file.makeOutputStream())
-    val ts = new TimeTrackingOutputStream(writeMetrics, countOs)
-    initialized = true
-    new ManualCloseOutputStream(ts, bufferSize)
-  }
+  def batchOffsets: Array[Long] = committedPositions.toArray
+
+  def committedPosition: Long = committedPositions.lastOption.getOrElse(0L)
+
+  private var committedRecords = 0L
+
+  def notCommittedRecords: Long =
+    writeMetrics.recordsWritten - committedRecords
+
+  def recordsWritten: Long = writeMetrics.recordsWritten
+
+  private def currentPosition = mcs.getCount
 
   private def getObjOut: SerializationStream = {
     if (objOs == null) {
@@ -84,31 +72,6 @@ private[spark] class SplashObjectWriter(
       bufferedOs = splashSerializer.wrap(blockId, mcs)
     }
     bufferedOs
-  }
-
-  private def closeResources(): Unit = {
-    if (initialized) {
-      Utils.tryWithSafeFinally {
-        closeOs()
-        mcs.manualClose()
-        if (noEmptyFile && committedPosition == 0) {
-          file.recall()
-        }
-      } {
-        countOs = null
-        initialized = false
-      }
-    }
-  }
-
-  override def close(): Unit = {
-    if (initialized) {
-      Utils.tryWithSafeFinally {
-        commitAndGet()
-      } {
-        closeResources()
-      }
-    }
   }
 
   private def closeOs(): Unit = {
@@ -128,24 +91,29 @@ private[spark] class SplashObjectWriter(
     }
   }
 
-  private[spark] override def flush(): Unit = {
-    if (objOs != null) {
-      objOs.flush()
+  private def closeResources(): Unit = {
+    closeOs()
+    mcs.manualClose()
+    if (noEmptyFile && committedPosition == 0) {
+      file.recall()
     }
-    if (bufferedOs != null) {
-      bufferedOs.flush()
+  }
+
+  override def close(): Unit = {
+    Utils.tryWithSafeFinally {
+      if (notCommittedRecords != 0) commitAndGet()
+    } {
+      closeResources()
     }
   }
 
   def commitAndGet(): Long = {
-    flush()
     closeOs()
 
-    val oldCommitted = committedPosition
-    committedPosition = if (countOs != null) countOs.getCount else 0
-    val committedLen = committedPosition - oldCommitted
+    val committedLen = currentPosition - committedPosition
     writeMetrics.incBytesWritten(committedLen)
-    numRecordsWritten = 0
+    committedRecords = writeMetrics.recordsWritten
+    committedPositions += currentPosition
     committedLen
   }
 
@@ -153,36 +121,35 @@ private[spark] class SplashObjectWriter(
     Utils.tryWithSafeFinally {
       closeResources()
     } {
-      if (numRecordsWritten != 0) {
-        logInfo(s"Should truncate $numRecordsWritten items but cannot.")
+      if (notCommittedRecords != 0) {
+        logWarning(s"Should truncate $notCommittedRecords items but cannot.")
       }
     }
     file
   }
 
   def write(key: Any, value: Any): Unit = {
-    val os = getObjOut
-    os.writeKey(key)
-    os.writeValue(value)
-
+    doWrite(key, value)
     recordWritten()
   }
 
-  def write(kv: (Any, Any)): Unit = {
-    write(kv._1, kv._2)
+  private def doWrite(key: Any, value: Any) = {
+    val os = getObjOut
+    os.writeKey(key)
+    os.writeValue(value)
+  }
+
+  def write(kv: Product2[Any, Any]): Unit = {
+    doWrite(kv._1, kv._2)
+    recordWritten()
   }
 
   override def write(b: Int): Unit = throw new UnsupportedOperationException()
 
   override def write(kvBytes: Array[Byte], offs: Int, len: Int): Unit = {
-    val os = getBufferedOs
-    os.write(kvBytes, offs, len)
-
+    getBufferedOs.write(kvBytes, offs, len)
     recordWritten()
   }
 
-  private def recordWritten(): Unit = {
-    numRecordsWritten += 1
-    writeMetrics.incRecordsWritten(1)
-  }
+  private def recordWritten(): Unit = writeMetrics.incRecordsWritten(1)
 }

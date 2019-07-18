@@ -15,6 +15,7 @@
       </run>
     </groups>
     <packages>
+      <package name="com.memverge.splash.*"/>
       <package name="org.apache.spark.shuffle.*"/>
     </packages>
     <classes>

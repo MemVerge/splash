@@ -52,4 +52,8 @@ public interface StorageFactory {
 
   // cleanup
   void reset();
+
+  default int getFileBufferSize() {
+    return StorageFactoryHolder.getBufferSize();
+  }
 }

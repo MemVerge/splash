@@ -34,6 +34,7 @@ class SplashSorterTest {
   private var sc: SparkContext = _
   private var sorter: SplashSorter[Int, Int, Int] = _
   private var strSorter: SplashSorter[String, String, String] = _
+  private val storageFactory = StorageFactoryHolder.getFactory
 
   @AfterMethod
   def afterMethod(): Unit = {
@@ -49,7 +50,7 @@ class SplashSorterTest {
       sc.stop()
       sc = null
     }
-    val storageFactory = StorageFactoryHolder.getFactory
+
     storageFactory.reset()
     assertThat(storageFactory.getTmpFileCount).isEqualTo(0)
   }
@@ -227,7 +228,7 @@ class SplashSorterTest {
       sc.conf)
     sorter.insertAll(elements)
 
-    assertThat(sorter.numSpills) isGreaterThan 0
+    assertThat(sorter.spillCount) isGreaterThan 0
     val it = sorter.partitionedIterator.map(p => (p._1, p._2.toList))
     assertThat(it.next()) isEqualTo ((0, Nil))
     assertThat(it.next()) isEqualTo ((1, List((1, 1))))
@@ -248,7 +249,7 @@ class SplashSorterTest {
 
   @Test(dataProvider = "confWithReducerNumList")
   def testSpillLocalReduceByKey(conf: ConfWithReducerN): Unit = {
-    val size = 5000
+    val size = 1000
     sc = newSparkContextWithForceSpillSize(conf.conf, size / 4)
     TestUtil.assertSpilled(sc) {
       val result = sc.parallelize(0 until size)
@@ -266,7 +267,7 @@ class SplashSorterTest {
 
   @Test(dataProvider = "confWithReducerNumList")
   def testSpillLocalGroupByKey(conf: ConfWithReducerN): Unit = {
-    val size = 5000
+    val size = 1000
     sc = newSparkContextWithForceSpillSize(conf.conf, size / 4)
     TestUtil.assertSpilled(sc) {
       val result = sc.parallelize(0 until size)
@@ -286,7 +287,7 @@ class SplashSorterTest {
   @Test(dataProvider = "confWithReducerNumList")
   def testBypassMergeSortEmptyPartitions(confWithReducerN: ConfWithReducerN): Unit = {
     val conf = TestUtil.hashBasedConf(confWithReducerN.conf)
-    val size = 5000
+    val size = 1000
     sc = newSparkContextWithForceSpillSize(conf, size / 4)
     val result = sc.parallelize(0 until size)
         .map { i => (i / 2, i) }
@@ -303,7 +304,7 @@ class SplashSorterTest {
 
   @Test(dataProvider = "confWithReducerNumList")
   def testSpillLocalCoGroup(conf: ConfWithReducerN): Unit = {
-    val size = 5000
+    val size = 1000
     sc = newSparkContextWithForceSpillSize(conf.conf, size / 4)
     TestUtil.assertSpilled(sc) {
       val rdd1 = sc.parallelize(0 until size).map { i => (i / 2, i) }
@@ -322,7 +323,7 @@ class SplashSorterTest {
 
   @Test(dataProvider = "confWithReducerNumList")
   def testSpillLocalSortByKey(conf: ConfWithReducerN): Unit = {
-    val size = 5000
+    val size = 1000
     sc = newSparkContextWithForceSpillSize(conf.conf, size / 4)
     TestUtil.assertSpilled(sc) {
       val result = sc.parallelize(0 until size)
@@ -371,7 +372,7 @@ class SplashSorterTest {
     }
 
     assertThat(sorter.iterator.toSet) isEqualTo (0 until expectedSize).map(i => (i, i)).toSet
-    assertThat(sorter.numSpills) isGreaterThan 0
+    assertThat(sorter.spillCount) isGreaterThan 0
 
     val storageFactory = StorageFactoryHolder.getFactory
     assertThat(storageFactory.getTmpFileCount) isGreaterThan 0
@@ -447,9 +448,9 @@ class SplashSorterTest {
     sorter.insertAll((0 until size).iterator.map { i => (i / 4, i) })
 
     if (withSpilling) {
-      assertThat(sorter.numSpills) isGreaterThan 0
+      assertThat(sorter.spillCount) isGreaterThan 0
     } else {
-      assertThat(sorter.numSpills) isEqualTo 0
+      assertThat(sorter.spillCount) isEqualTo 0
     }
 
     val results = sorter.partitionedIterator.map {
@@ -521,7 +522,7 @@ class SplashSorterTest {
       context, Some(agg), None, None)
 
     testSorter.insertAll(testData.iterator.map(i => (i, i)))
-    assertThat(testSorter.numSpills) isGreaterThan 0
+    assertThat(testSorter.spillCount) isGreaterThan 0
 
     var minKey = Int.MinValue
     val iterator = testSorter.iterator
@@ -576,7 +577,7 @@ class SplashSorterTest {
         .map(s => (s, s)) ++ collisionPairs ++ collisionPairs.map(_.swap)
 
     testSorter.insertAll(toInsert.iterator)
-    assertThat(testSorter.numSpills) isGreaterThan 0
+    assertThat(testSorter.spillCount) isGreaterThan 0
 
     val collisionMap = (collisionPairs ++ collisionPairs.map(_.swap)).toMap
 
@@ -601,7 +602,7 @@ class SplashSorterTest {
       context, Some(agg), None, None)
     val toInsert = for (_ <- 1 to 10; j <- 1 to size) yield (FixedHash(j, j % 2), 1)
     testSorter.insertAll(toInsert.iterator)
-    assertThat(testSorter.numSpills) isGreaterThan 0
+    assertThat(testSorter.spillCount) isGreaterThan 0
     val it = testSorter.iterator
     var count = 0
     while (it.hasNext) {
@@ -611,6 +612,49 @@ class SplashSorterTest {
     }
     assertThat(count) isEqualTo size
     testSorter.stop()
+  }
+
+  def testSpillWithCustomSpillCheckInterval(): Unit = {
+    val size = 1000
+    val conf = TestUtil.confWithoutKryo
+        .set(SplashOpts.forceSpillElements, size / 2)
+        .set(SplashOpts.spillCheckInterval, size / 10)
+    sc = TestUtil.newSparkContext(conf)
+
+    val context = TestUtil.newTaskContext(sc.conf)
+    val agg = new Aggregator[FixedHash, Int, Int](_ => 1, _ + _, _ + _)
+
+    val testSorter = new SplashSorter[FixedHash, Int, Int](
+      context, Some(agg), None, None)
+    val toInsert = for (_ <- 1 to 10; j <- 1 to size) yield (FixedHash(j, j % 2), 1)
+    testSorter.insertAll(toInsert.iterator)
+    testSorter.updateTaskMetrics()
+
+    assertThat(testSorter.spillCount) isEqualTo 18
+    val metrics = context.taskMetrics()
+    assertThat(metrics.memoryBytesSpilled) isEqualTo 538452L
+    assertThat(metrics.diskBytesSpilled) isEqualTo 247747L
+    testSorter.stop()
+  }
+
+  def testForceSpillFileCanBeCleaned(): Unit = {
+    sc = TestUtil.newSparkContext(TestUtil.confWithKryo)
+
+    sorter = TestUtil.newSplashSorter[Int, Int, Int](
+      Some(TestUtil.sumAgg),
+      Some(new HashPartitioner(7)),
+      Some(implicitly[Ordering[Int]]),
+      sc.conf)
+
+    val elements = Set((1, 1), (2, 2), (5, 5))
+    sorter.insertAll(elements.iterator)
+
+    sorter.spill(0, null)
+
+    // verify that we do not keep any handle of the spilled file
+    // which prevent us from cleaning the storage.
+    storageFactory.reset()
+    assertThat(storageFactory.getTmpFileCount).isEqualTo(0)
   }
 
   def testSpillWithHashCollisionsUsingIntMaxValueKey(): Unit = {
@@ -632,7 +676,7 @@ class SplashSorterTest {
       context, Some(agg), None, None)
     testSorter.insertAll(
       (1 to size).iterator.map(i => (i, i)) ++ Iterator((Int.MaxValue, Int.MaxValue)))
-    assertThat(testSorter.numSpills) isGreaterThan 0
+    assertThat(testSorter.spillCount) isGreaterThan 0
     val it = testSorter.iterator
     // Should not throw NoSuchElementException
     while (it.hasNext) it.next()
@@ -660,7 +704,7 @@ class SplashSorterTest {
       ("1", null.asInstanceOf[String]),
       (null.asInstanceOf[String], null.asInstanceOf[String])
     ))
-    assertThat(testSorter.numSpills) isGreaterThan 0
+    assertThat(testSorter.spillCount) isGreaterThan 0
     val it = testSorter.iterator
     // Should not throw NullPointerException
     while (it.hasNext) it.next()
@@ -690,5 +734,67 @@ class SplashSorterTest {
         .collect().toSet
     val expected = Set((10, FixedHash(125250, 10)))
     assertThat(actual) isEqualTo expected
+  }
+
+  private def getTestSumSorter: SplashSorter[Int, Int, Int] = {
+    val conf = TestUtil.confWithKryo
+    sc = TestUtil.newSparkContext(conf)
+
+    TestUtil.newSplashSorter[Int, Int, Int](
+      Some(TestUtil.sumAgg),
+      Some(new HashPartitioner(3)),
+      Some(implicitly[Ordering[Int]]),
+      conf)
+  }
+
+  def testPartitionedIteratorWithSumAndSort(): Unit = {
+    sorter = getTestSumSorter
+    sorter.insertAll(List((1, 2), (1, 3), (5, 3), (2, 5), (5, 1)))
+
+    val arr = sorter.partitionedIterator.toArray
+    val item0 = arr(0)
+    assertThat(item0._1).isEqualTo(0)
+    assertThat(item0._2.toArray).isEqualTo(Array.empty)
+
+    val item1 = arr(1)
+    assertThat(item1._1).isEqualTo(1)
+    assertThat(item1._2.toArray).isEqualTo(Array((1, 5)))
+
+    val item2 = arr(2)
+    assertThat(item2._1).isEqualTo(2)
+    assertThat(item2._2.toArray).isEqualTo(Array((2, 5), (5, 4)))
+  }
+
+  def testIteratorWithSumAndSort(): Unit = {
+    sorter = getTestSumSorter
+    sorter.insertAll(List((1, 2), (1, 3), (5, 3), (2, 5), (5, 1)))
+
+    assertThat(sorter.iterator.toArray).isEqualTo(Array((1, 5), (2, 5), (5, 4)))
+  }
+
+  def testToSeqWithSumAndSort(): Unit = {
+    sorter = getTestSumSorter
+    sorter.insertAll(List((1, 2), (1, 3), (5, 3), (2, 5), (5, 1)))
+
+    assertThat(sorter.toSeq).isEqualTo(Seq((1, 5), (2, 5), (5, 4)))
+  }
+
+  def testToSetWithSumAnd3Partition(): Unit = {
+    sorter = getTestSumSorter
+    sorter.insertAll(List((1, 2), (1, 3), (5, 3), (2, 5), (5, 1)))
+
+    assertThat(sorter.toSet).isEqualTo(Set(
+      (0, Set.empty),
+      (1, Set((1, 5))),
+      (2, Set((2, 5), (5, 4)))))
+  }
+
+  def testIteratorWithSumAndSortAfterForceSpill(): Unit = {
+    sorter = getTestSumSorter
+    sorter.insertAll(List((1, 2), (1, 3), (5, 3), (2, 5), (5, 1)))
+    val iterator = sorter.iterator
+    sorter.spill(0, null)
+
+    assertThat(iterator.toArray).isEqualTo(Array((1, 5), (2, 5), (5, 4)))
   }
 }

@@ -20,9 +20,9 @@
  */
 package org.apache.spark.shuffle
 
-import java.io.File
+import java.io.{DataInputStream, File}
 
-import com.memverge.splash.StorageFactoryHolder
+import com.memverge.splash.{ShuffleFile, StorageFactoryHolder}
 import org.apache.commons.io.FileUtils
 import org.apache.commons.lang3.StringUtils
 import org.apache.spark.SparkContext
@@ -38,24 +38,24 @@ class SplashShuffleBlockResolverTest {
   private var dumpFile: String = _
 
   @BeforeClass
-  def beforeClass(): Unit = {
+  private def beforeClass(): Unit = {
     sc = TestUtil.newSparkContext(TestUtil.newSparkConf())
   }
 
   @AfterClass
-  def afterClass(): Unit = {
+  private def afterClass(): Unit = {
     if (sc != null) {
       sc.stop()
     }
   }
 
   @BeforeMethod
-  def beforeMethod(): Unit = {
+  private def beforeMethod(): Unit = {
     resolver = new SplashShuffleBlockResolver("test-app")
   }
 
   @AfterMethod
-  def afterMethod(): Unit = {
+  private def afterMethod(): Unit = {
     StorageFactoryHolder.getFactory.reset()
     if (StringUtils.isNotEmpty(dumpFile)) {
       FileUtils.deleteQuietly(new File(dumpFile))
@@ -75,7 +75,6 @@ class SplashShuffleBlockResolverTest {
     val dataFile = resolver.getDataFile(shuffleId, mapId)
     assertThat(dataFile.exists()) isTrue()
     assertThat(dataFile.getSize) isEqualTo 30
-    assertThat(dataTmp.exists()) isFalse()
   }
 
   def testCommitShuffleDataMultipleTimes(): Unit = {
@@ -85,20 +84,19 @@ class SplashShuffleBlockResolverTest {
     val lengths1 = Array(10L, 0L, 20L)
     val dataTmp1 = resolver.getDataTmpFile(shuffleId, mapId)
 
-    resolver.writeData(dataTmp1, new Array[Byte](30))
+    resolver.writeData(dataTmp1, (1 to 30).map(_.toByte).toArray)
     resolver.writeIndexFileAndCommit(shuffleId, mapId, lengths1, dataTmp1)
 
     // second write, overwrite first commit
     val dataTmp2 = resolver.getDataTmpFile(shuffleId, mapId)
-    val lengths2 = new Array[Long](3)
+    val lengths2 = Array(10L, 6L, 9L)
 
-    resolver.writeData(dataTmp2, Array[Byte](1) ++ new Array[Byte](29))
+    resolver.writeData(dataTmp2, (100 to 124).map(_.toByte).toArray)
     resolver.writeIndexFileAndCommit(shuffleId, mapId, lengths2, dataTmp2)
 
     var dataFile = resolver.getDataFile(shuffleId, mapId)
     assertThat(dataFile.exists()) isTrue()
-    assertThat(dataFile.getSize) isEqualTo 30
-    assertThat(dataTmp2.exists()) isFalse()
+    assertThat(dataFile.getSize) isEqualTo 25
 
     // remove data file and third write, write should success
     dataFile.delete()
@@ -112,7 +110,6 @@ class SplashShuffleBlockResolverTest {
     assertThat(lengths1.toSeq) isNotEqualTo lengths3.toSeq
     assertThat(dataFile.exists()) isTrue()
     assertThat(dataFile.getSize) isEqualTo 35
-    assertThat(dataTmp3.exists()) isFalse()
 
     SplashUtils.withResources(dataFile.makeInputStream()) { is =>
       assertThat(is.read()) isEqualTo 2
@@ -166,7 +163,6 @@ class SplashShuffleBlockResolverTest {
     val indexFile = resolver.getIndexFile(shuffleId, mapId)
     assertThat(dataFile.exists()) isTrue()
     assertThat(dataFile.getSize) isEqualTo 0
-    assertThat(dataTmp.exists()) isFalse()
     assertThat(indexFile.exists()) isTrue()
     assertThat(indexFile.getSize) isEqualTo 0
   }
@@ -228,5 +224,88 @@ class SplashShuffleBlockResolverTest {
   def testReadIndexFileNotExists(): Unit = {
     val actual = resolver.readIndex(shuffleId, mapId = 12)
     assertThat(actual).isEmpty()
+  }
+
+  def testInvalidZeroData(): Unit = {
+    val mapId = 13
+
+    // first write, with valid data
+    val lengths1 = Array(0L, 0L, 0L)
+    val dataTmp1 = resolver.getDataTmpFile(shuffleId, mapId)
+
+    val data = (1 to 30).map(_.toByte).toArray
+    resolver.writeData(dataTmp1, data)
+    resolver.writeIndexFileAndCommit(shuffleId, mapId, lengths1, dataTmp1)
+    assertThat(resolver.getIndexFile(shuffleId, mapId).exists).isFalse
+    assertThat(resolver.getDataFile(shuffleId, mapId).exists).isFalse
+  }
+
+  def testReCommitWithInvalidData(): Unit = {
+    val mapId = 14
+
+    // first write, with valid data
+    val lengths1 = Array(10L, 0L, 20L)
+    val dataTmp1 = resolver.getDataTmpFile(shuffleId, mapId)
+
+    val data1 = (1 to 30).map(_.toByte).toArray
+    resolver.writeData(dataTmp1, data1)
+    resolver.writeIndexFileAndCommit(shuffleId, mapId, lengths1, dataTmp1)
+
+    // second write with invalid data
+    val dataTmp2 = resolver.getDataTmpFile(shuffleId, mapId)
+    val lengths2 = Array(10L, 6L, 9L)
+
+    resolver.writeData(dataTmp2, (100 to 102).map(_.toByte).toArray)
+    resolver.writeIndexFileAndCommit(shuffleId, mapId, lengths2, dataTmp2)
+
+    val indexFile = resolver.getIndexFile(shuffleId, mapId)
+    verifyIndex(indexFile, lengths1)
+
+    val dataFile = resolver.getDataFile(shuffleId, mapId)
+    SplashUtils.withResources(dataFile.makeInputStream()) { is =>
+      val buffer = new Array[Byte](lengths1.sum.intValue)
+      is.read(buffer)
+      assertThat(buffer) isEqualTo data1
+    }
+  }
+
+  def testOverwriteInvalidDataWithZeroInput(): Unit = {
+    val mapId = 15
+
+    // first write, with invalid data
+    val lengths1 = Array(10L, 1111L, 20L)
+    val dataTmp1 = resolver.getDataTmpFile(shuffleId, mapId)
+
+    val data1 = (1 to 30).map(_.toByte).toArray
+    resolver.writeData(dataTmp1, data1)
+    resolver.writeIndexFileAndCommit(shuffleId, mapId, lengths1, dataTmp1)
+
+    // first write, with valid data
+    val lengths2 = Array(0L, 0L, 0L, 0L)
+    val dataTmp2 = resolver.getDataTmpFile(shuffleId, mapId)
+    val data = Array[Byte]()
+    resolver.writeData(dataTmp2, data)
+    resolver.writeIndexFileAndCommit(shuffleId, mapId, lengths2, dataTmp2)
+
+    val indexFile = resolver.getIndexFile(shuffleId, mapId)
+    val dataFile = resolver.getDataFile(shuffleId, mapId)
+    assertThat(indexFile.exists).isTrue
+    assertThat(indexFile.getSize) isEqualTo 0
+    assertThat(dataFile.exists).isTrue
+    assertThat(dataFile.getSize) isEqualTo 0
+  }
+
+  private def verifyIndex(indexFile: ShuffleFile, lengths: Array[Long]): Unit = {
+    val offsets = new Array[Long](lengths.length + 1)
+    var offset = 0L
+    (1 to lengths.length).foreach(i => {
+      offset = offset + lengths(i - 1)
+      offsets(i) = offset
+    })
+    SplashUtils.withResources(new DataInputStream(
+      indexFile.makeBufferedInputStream())) { is =>
+      val actual = (0 to lengths.length).map(_ => is.readLong()).toArray
+      assertThat(actual).isEqualTo(offsets)
+    }
   }
 }

@@ -69,7 +69,6 @@ private[spark] class SplashUnsafeSorter(
   private val initialSize: Int = conf.get(SplashOpts.shuffleInitialBufferSize)
   private val numElementsForSpillThreshold: Int = conf.get(SplashOpts.forceSpillElements)
   private val useRadixSort = conf.get(SplashOpts.useRadixSort)
-  private val fileBufferSize = conf.get(SplashOpts.shuffleFileBufferKB).toInt * 1024
 
   private var inMemSorter =
     new ShuffleInMemorySorter(this, initialSize, useRadixSort)
@@ -97,6 +96,8 @@ private[spark] class SplashUnsafeSorter(
     // This call performs the actual sort
     val sortedRecords = inMemSorter.getSortedIterator
 
+    val fileBufferSize = storageFactory.getFileBufferSize
+
     // cache to buffer small writes
     val writeBuffer = new Array[Byte](fileBufferSize)
     val blockId = TempShuffleBlockId(UUID.randomUUID())
@@ -109,7 +110,6 @@ private[spark] class SplashUnsafeSorter(
       blockId,
       tmpSpillFile,
       serializer,
-      fileBufferSize,
       writeMetricsToUse)
 
     var currentPartition = -1

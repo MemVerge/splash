@@ -15,11 +15,12 @@
       </run>
     </groups>
     <packages>
+      <package name="com.memverge.splash.*"/>
       <package name="org.apache.spark.shuffle.*"/>
     </packages>
     <classes>
-      <class name="org.apache.spark.shuffle.sort.SplashUnsafeSorterTest" />
-      <class name="org.apache.spark.shuffle.sort.SplashUnsafeShuffleWriterTest" />
+      <class name="org.apache.spark.shuffle.sort.SplashUnsafeSorterTest"/>
+      <class name="org.apache.spark.shuffle.sort.SplashUnsafeShuffleWriterTest"/>
     </classes>
   </test>
 </suite>

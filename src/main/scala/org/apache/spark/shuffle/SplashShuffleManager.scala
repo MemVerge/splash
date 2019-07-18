@@ -33,15 +33,16 @@ class SplashShuffleManager(conf: SparkConf) extends ShuffleManager with Logging 
   logInfo(s"initialize SplashShuffleManager ${SplashShuffleManager.version}")
 
   StorageFactoryHolder.setSparkConf(conf)
+  initializeComponentConfigurations()
+
   private val numMapsForShuffle = new ConcurrentHashMap[Int, Int]()
 
   /**
    * Return a resolver capable of retrieving shuffle block data based on block
    * coordinates.
    */
-  override lazy val shuffleBlockResolver = new SplashShuffleBlockResolver(
-    conf.getAppId,
-    conf.get(SplashOpts.shuffleFileBufferKB).toInt)
+  override lazy val shuffleBlockResolver =
+    new SplashShuffleBlockResolver(conf.getAppId)
 
   /**
    * Register a shuffle with the manager and obtain a handle for it to pass to
@@ -170,22 +171,22 @@ class SplashShuffleManager(conf: SparkConf) extends ShuffleManager with Logging 
    * path that operates on deserialized objects.
    */
   private def canUseSerializedShuffle(dependency: ShuffleDependency[_, _, _]): Boolean = {
-    val shufId = dependency.shuffleId
+    val shuffleId = dependency.shuffleId
     val numPartitions = dependency.partitioner.numPartitions
     if (!dependency.serializer.supportsRelocationOfSerializedObjects) {
-      log.debug(s"Can't use serialized shuffle for shuffle $shufId because the serializer, " +
+      log.debug(s"Can't use serialized shuffle for shuffle $shuffleId because the serializer, " +
           s"${dependency.serializer.getClass.getName}, does not support object relocation")
       false
     } else if (dependency.aggregator.isDefined) {
       log.debug(
-        s"Can't use serialized shuffle for shuffle $shufId because an aggregator is defined")
+        s"Can't use serialized shuffle for shuffle $shuffleId because an aggregator is defined")
       false
     } else if (numPartitions > MAX_SHUFFLE_OUTPUT_PARTITIONS_FOR_SERIALIZED_MODE) {
-      log.debug(s"Can't use serialized shuffle for shuffle $shufId because it has more than " +
+      log.debug(s"Can't use serialized shuffle for shuffle $shuffleId because it has more than " +
           s"$MAX_SHUFFLE_OUTPUT_PARTITIONS_FOR_SERIALIZED_MODE partitions")
       false
     } else {
-      log.debug(s"Can use serialized shuffle for shuffle $shufId")
+      log.debug(s"Can use serialized shuffle for shuffle $shuffleId")
       true
     }
   }
@@ -200,6 +201,12 @@ class SplashShuffleManager(conf: SparkConf) extends ShuffleManager with Logging 
           s"bypass merge threshold $bypassMergeThreshold")
       dep.partitioner.numPartitions <= bypassMergeThreshold
     }
+  }
+
+  private def initializeComponentConfigurations(): Unit = {
+    SpilledFile.serializeBatchSize = conf.get(SplashOpts.serializeBatchSize)
+    StorageFactoryHolder.setBufferSize(
+      conf.get(SplashOpts.shuffleFileBufferKB).intValue * 1024)
   }
 }
 

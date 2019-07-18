@@ -86,9 +86,8 @@ class SplashSpillableIterator[T](var upstream: Iterator[T],
     val getNextUpstream: SpilledFile => Iterator[T])
     extends Iterator[T] with Logging {
   private val spillLock = new Object
-  private var nextUpstream: Iterator[T] = _
-  private var cur: T = readNext()
   private var spilledFileOpt: Option[SpilledFile] = None
+  private var cur: T = readNext()
 
   def spill(): Option[SpilledFile] = spillLock.synchronized {
     spilledFileOpt match {
@@ -98,20 +97,18 @@ class SplashSpillableIterator[T](var upstream: Iterator[T],
       case None =>
         // never spilled, now spilling
         val spilledFile = spillInMemoryIterator(upstream)
-        val shuffleTmpFile = spilledFile.file
-        nextUpstream = getNextUpstream(spilledFile)
-        logDebug(s"spilling in-memory " +
-            s"data structure to storage ${shuffleTmpFile.getPath} " +
-            s"size ${shuffleTmpFile.getSize}.")
         spilledFileOpt = Some(spilledFile)
         spilledFileOpt
     }
   }
 
   def readNext(): T = spillLock.synchronized {
-    if (nextUpstream != null) {
-      upstream = nextUpstream
-      nextUpstream = null
+    spilledFileOpt match {
+      case Some(spilledFile) =>
+        upstream = getNextUpstream(spilledFile)
+        spilledFileOpt = None
+      case None =>
+      // do nothing
     }
     if (upstream.hasNext) {
       upstream.next()

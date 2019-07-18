@@ -21,22 +21,20 @@
 package org.apache.spark.shuffle
 
 import java.io._
-import java.nio.file.{FileAlreadyExistsException, Paths}
+import java.nio.file.{FileAlreadyExistsException, Path, Paths}
 import java.security.MessageDigest
 
+import com.google.common.annotations.VisibleForTesting
 import com.memverge.splash.{ShuffleFile, StorageFactory, StorageFactoryHolder, TmpShuffleFile}
 import org.apache.commons.io.IOUtils
 import org.apache.commons.lang3.StringUtils
 import org.apache.spark.SparkEnv
 import org.apache.spark.internal.Logging
 import org.apache.spark.network.buffer.ManagedBuffer
-import org.apache.spark.network.util.LimitedInputStream
 import org.apache.spark.storage.{BlockId, BlockManagerId, ShuffleBlockId}
 
 
-private[spark] class SplashShuffleBlockResolver(
-    appId: String,
-    fileBufferSizeKB: Int = 8)
+private[spark] class SplashShuffleBlockResolver(appId: String)
     extends ShuffleBlockResolver with Logging {
   StorageFactoryHolder.onApplicationStart()
 
@@ -49,6 +47,8 @@ private[spark] class SplashShuffleBlockResolver(
   private val storageFactory: StorageFactory = StorageFactoryHolder.getFactory
 
   private val shuffleTypeManager = ShuffleTypeManager(this)
+
+  private val traceDataChecksum = log.isTraceEnabled
 
   override def getBlockData(blockId: ShuffleBlockId): ManagedBuffer =
     throw new UnsupportedOperationException("Not used by Splash.")
@@ -109,7 +109,7 @@ private[spark] class SplashShuffleBlockResolver(
         readPartitionByIndex(blockId, shuffleBlockId)
       }
     } else {
-      log.error(s"only works for shuffle block id, current block id: $blockId")
+      logError(s"only works for shuffle block id, current block id: $blockId")
       None
     }
   }
@@ -119,13 +119,11 @@ private[spark] class SplashShuffleBlockResolver(
       shuffleBlockId.shuffleId,
       shuffleBlockId.mapId,
       shuffleBlockId.reduceId)
-    val dataIs = dataFile.makeInputStream()
-
-    if (log.isDebugEnabled) {
+    if (traceDataChecksum) {
       logPartitionMd5(dataFile)
     }
 
-    val stream = new BufferedInputStream(dataIs, fileBufferSizeKB * 1024)
+    val stream = dataFile.makeBufferedInputStream()
     Some(BlockDataStreamInfo(stream, dataFile.getSize))
   }
 
@@ -134,23 +132,21 @@ private[spark] class SplashShuffleBlockResolver(
     val dataFile = getDataFile(shuffleBlockId)
     try
       SplashUtils.withResources {
-        val indexIs = indexFile.makeInputStream()
-        logDebug(s"Shuffle ${indexFile.getPath}, seek ${shuffleBlockId.reduceId * 8L}")
-        indexIs.skip(shuffleBlockId.reduceId * 8L)
-        new DataInputStream(new BufferedInputStream(indexIs, 16))
+        val start = shuffleBlockId.reduceId * 8L
+        logDebug(s"Shuffle ${indexFile.getPath}, seek $start")
+        val stream = indexFile.makeBufferedInputStreamWithin(start, start + 16)
+        new DataInputStream(stream)
       } { indexDataIs =>
         val offset = indexDataIs.readLong()
         val nextOffset = indexDataIs.readLong()
         logDebug(s"got partition of $blockId from $offset to $nextOffset " +
             s"file ${indexFile.getPath} size ${indexFile.getSize}")
-        val dataIs = new LimitedInputStream(dataFile.makeInputStream(), nextOffset)
-        dataIs.skip(offset)
 
-        if (log.isDebugEnabled) {
+        if (traceDataChecksum) {
           logPartitionMd5(dataFile, offset, nextOffset)
         }
 
-        val stream = new BufferedInputStream(dataIs, fileBufferSizeKB * 1024)
+        val stream = dataFile.makeBufferedInputStreamWithin(offset, nextOffset)
         Some(BlockDataStreamInfo(stream, nextOffset - offset))
       }
     catch {
@@ -168,9 +164,8 @@ private[spark] class SplashShuffleBlockResolver(
     logDebug(s"read partition from $offset to $nextOffset " +
         s"in ${dataFile.getPath} size ${dataFile.getSize}.")
     SplashUtils.withResources {
-      val is = new LimitedInputStream(dataFile.makeInputStream(), nextOffset)
-      is.skip(offset)
-      new BufferedInputStream(is)
+      val stream = dataFile.makeBufferedInputStreamWithin(offset, nextOffset)
+      new BufferedInputStream(stream)
     } { is =>
       val buf = new Array[Byte]((nextOffset - offset).asInstanceOf[ShuffleId])
       is.read(buf)
@@ -199,12 +194,14 @@ private[spark] class SplashShuffleBlockResolver(
     dumpFolder
   }
 
+  def getDumpFilePath(blockId: BlockId): Path =
+    Paths.get(getDumpFolder, s"$blockId.dump")
+
   def dump(blockId: BlockId): String = {
-    val dumpFolder: String = getDumpFolder
-    val dumpFilePath = Paths.get(dumpFolder, s"$blockId.dump")
+    val dumpFilePath = getDumpFilePath(blockId)
     val dumpFile = dumpFilePath.toFile
     if (dumpFile.exists()) {
-      log.info(s"old dump file $dumpFilePath already exists, remove it first.")
+      logInfo(s"old dump file $dumpFilePath already exists, remove it first.")
       dumpFile.delete()
     }
     SplashUtils.withResources {
@@ -214,11 +211,11 @@ private[spark] class SplashShuffleBlockResolver(
         case Some(BlockDataStreamInfo(is, _)) =>
           try {
             IOUtils.copy(is, os)
-            log.info(s"dump ${blockId.name} to $dumpFilePath success.")
+            logInfo(s"dump $blockId to $dumpFilePath success.")
           } finally {
             is.close()
           }
-        case _ => log.warn(s"input stream is not available for ${blockId.name}")
+        case _ => log.warn(s"input stream is not available for $blockId")
       }
     }
     dumpFilePath.toString
@@ -258,15 +255,23 @@ private[spark] class SplashShuffleBlockResolver(
     var offset = 0L
 
     if (lengths.length == 0 || lengths.sum == 0) {
-      // even if there is nothing to write,
-      // we need to make sure the tmp files are created.
-      createEmptyFile(indexTmp)
-      createEmptyFile(dataTmp)
+      val dataTmpSize = dataTmp.getSize
+      if (dataTmpSize > 0) {
+        logWarning(s"data size is $dataTmpSize " +
+            s"while lengths is ${lengths.toSeq}, do nothing and return")
+        dataTmp.recall()
+        dataTmp.delete()
+        return
+      } else {
+        // even if there is nothing to write,
+        // we need to make sure the tmp files are created.
+        createEmptyFile(indexTmp)
+        createEmptyFile(dataTmp)
+      }
     } else {
       SplashUtils.withResources(
         new DataOutputStream(
-          new BufferedOutputStream(
-            indexTmp.makeOutputStream()))) { os =>
+          indexTmp.makeBufferedOutputStream())) { os =>
         os.writeLong(offset)
         for (length <- lengths) {
           offset += length
@@ -275,15 +280,48 @@ private[spark] class SplashShuffleBlockResolver(
       }
     }
 
-    logDebug(s"commit shuffle index ${indexTmp.getCommitTarget.getPath}.")
-    indexTmp.commit()
-
-    logDebug(s"commit shuffle data ${dataTmp.getCommitTarget.getPath}.")
-    dataTmp.commit()
-
-    if (log.isDebugEnabled()) {
+    commitTmpFiles(lengths, indexTmp, dataTmp)
+    if (traceDataChecksum) {
       // check data in the shuffle output we just committed
       checkIndexAndDataFile(shuffleId, mapId)
+    }
+  }
+
+  private def commitTmpFiles(
+      lengths: Array[Long],
+      indexTmp: TmpShuffleFile,
+      dataTmp: TmpShuffleFile): Unit = {
+    try {
+      logDebug(s"commit shuffle index ${indexTmp.getCommitTarget.getPath}.")
+      indexTmp.commit()
+
+      logDebug(s"commit shuffle data ${dataTmp.getCommitTarget.getPath}.")
+      dataTmp.commit()
+    } catch {
+      case ex: FileAlreadyExistsException =>
+        val indexFile = indexTmp.getCommitTarget
+        val dataFile = dataTmp.getCommitTarget
+        val indexPath = indexFile.getPath
+        val dataPath = dataFile.getPath
+        logWarning(s"target already exists, ${ex.getMessage}")
+        val tmpDataSize = dataTmp.getSize
+        if (lengths.sum != tmpDataSize) {
+          logInfo("invalid re-commit data, keep the old one, "
+              + s"new lengths: ${lengths.toSeq}, data size: $tmpDataSize")
+          indexTmp.recall()
+          dataTmp.recall()
+        } else {
+          logInfo("replace disk data with new data, "
+              + s"new lengths: ${lengths.toSeq}, data size: $tmpDataSize")
+          logDebug(s"delete old index $indexPath")
+          indexFile.delete()
+          logDebug(s"delete old data $dataPath")
+          dataFile.delete()
+          logDebug(s"commit new shuffle index $indexPath.")
+          indexTmp.commit()
+          logDebug(s"commit new shuffle data $dataPath.")
+          dataTmp.commit()
+        }
     }
   }
 
@@ -333,11 +371,7 @@ private[spark] class SplashShuffleBlockResolver(
   private[shuffle] def readIndex(shuffleId: Int, mapId: Int): Array[Long] = {
     val index = getIndexFile(shuffleId, mapId)
     try {
-      SplashUtils.withResources(
-        new DataInputStream(
-          new BufferedInputStream(
-            index.makeInputStream()))) { in =>
-
+      SplashUtils.withResources(index.makeBufferedDataInputStream()) { in =>
         Iterator.continually {
           try {
             in.readLong()
@@ -348,7 +382,7 @@ private[spark] class SplashShuffleBlockResolver(
       }
     } catch {
       case ex@(_: IllegalArgumentException |
-               _: FileNotFoundException |
+               _: IOException |
                _: IllegalStateException) =>
         logDebug(s"create input stream failed: ${ex.getMessage}")
         Array.emptyLongArray
@@ -364,7 +398,7 @@ private[spark] class SplashShuffleBlockResolver(
       // calculate lengths from offsets
       ret = (offsets zip offsets.tail map (i => i._2 - i._1)).toArray
 
-      if (log.isDebugEnabled) {
+      if (traceDataChecksum) {
         log.debug("log md5 for {} during shuffle write.", data.getPath)
         // print MD5 for each partition
         (0 to offsets.length - 2).foreach { i =>
@@ -376,18 +410,13 @@ private[spark] class SplashShuffleBlockResolver(
   }
 
   def writeData(dataFile: TmpShuffleFile, data: Array[Byte]): Unit = {
-    SplashUtils.withResources(
-      new BufferedOutputStream(
-        dataFile.makeOutputStream())) {
+    SplashUtils.withResources(dataFile.makeBufferedOutputStream()) {
       os => os.write(data)
     }
   }
 
   def writeIndices(indexFile: TmpShuffleFile, indices: Array[Long]): Unit = {
-    SplashUtils.withResources(
-      new DataOutputStream(
-        new BufferedOutputStream(
-          indexFile.makeOutputStream()))) { out =>
+    SplashUtils.withResources(indexFile.makeBufferedDataOutputStream()) { out =>
       val last = indices.foldLeft(0L) { (acc, curr) =>
         out.writeLong(acc)
         acc + curr
@@ -403,6 +432,20 @@ private[spark] class SplashShuffleBlockResolver(
   def cleanup(): Unit = {
     logInfo(s"cleanup shuffle folder $shuffleFolder for $appId")
     storageFactory.cleanShuffle(appId)
+  }
+
+  @VisibleForTesting
+  def putShuffleBlock(shuffleId: Int, mapId: Int, lengths: Array[Long],
+      dataOpt: Option[Array[Byte]] = None): ShuffleBlockId = {
+    val data = dataOpt match {
+      case Some(arr) => arr
+      case None => (1L to lengths.sum).map(_.toByte).toArray
+    }
+
+    val dataTmp = getDataTmpFile(shuffleId, mapId)
+    writeData(dataTmp, data)
+    writeIndexFileAndCommit(shuffleId, mapId, lengths, dataTmp)
+    ShuffleBlockId(shuffleId, mapId, 0)
   }
 }
 

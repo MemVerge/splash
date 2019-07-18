@@ -37,6 +37,8 @@ private[spark] class SplashShuffleWriter[K, V, C](
     context: TaskContext)
     extends ShuffleWriter[K, V] with Logging {
 
+  private type KVPair = (K, V)
+
   private var sorter: SplashSorter[K, V, _] = _
 
   private var stopping = false

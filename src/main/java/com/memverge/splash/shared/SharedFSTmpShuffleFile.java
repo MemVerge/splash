@@ -18,13 +18,14 @@ package com.memverge.splash.shared;
 import com.memverge.splash.ShuffleFile;
 import com.memverge.splash.TempFolder;
 import com.memverge.splash.TmpShuffleFile;
-import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.OutputStream;
+import java.nio.file.FileAlreadyExistsException;
 import java.nio.file.Paths;
 import java.util.UUID;
+import lombok.val;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -46,12 +47,12 @@ public class SharedFSTmpShuffleFile extends SharedFSShuffleFile implements
   }
 
   static SharedFSTmpShuffleFile make() {
-    UUID uuid = UUID.randomUUID();
-    String tmpPath = folder.getTmpPath();
-    String filename = String.format("%s%s", TMP_FILE_PREFIX, uuid.toString());
-    String fullPath = Paths.get(tmpPath, filename).toString();
+    val uuid = UUID.randomUUID();
+    val tmpPath = folder.getTmpPath();
+    val filename = String.format("%s%s", TMP_FILE_PREFIX, uuid.toString());
+    val fullPath = Paths.get(tmpPath, filename).toString();
 
-    SharedFSTmpShuffleFile ret = new SharedFSTmpShuffleFile(fullPath);
+    val ret = new SharedFSTmpShuffleFile(fullPath);
     ret.uuid = uuid;
     return ret;
   }
@@ -63,14 +64,15 @@ public class SharedFSTmpShuffleFile extends SharedFSShuffleFile implements
     if (!(file instanceof SharedFSShuffleFile)) {
       throw new IOException("only accept SharedFSShuffleFile");
     }
-    SharedFSTmpShuffleFile ret = make();
+    val ret = make();
     ret.commitTarget = (SharedFSShuffleFile) file;
     return ret;
   }
 
   @Override
   public TmpShuffleFile create() throws IOException {
-    File parent = getFile().getParentFile();
+    val file = getFile();
+    val parent = file.getParentFile();
     if (!parent.exists()) {
       boolean created = parent.mkdirs();
       if (!created) {
@@ -78,9 +80,15 @@ public class SharedFSTmpShuffleFile extends SharedFSShuffleFile implements
             parent.getAbsolutePath());
       }
     }
-    boolean created = getFile().createNewFile();
+    if (file.exists()) {
+      val deleted = file.delete();
+      log.info("file already exists.  delete file {} (result: {})",
+          file.getAbsolutePath(), deleted);
+    }
+    val created = file.createNewFile();
     if (!created) {
-      throw new IOException(String.format("file %s already exists.", getPath()));
+      throw new IOException(
+          String.format("file %s already exists.", getPath()));
     } else {
       log.debug("file {} created.", getPath());
     }
@@ -90,19 +98,19 @@ public class SharedFSTmpShuffleFile extends SharedFSShuffleFile implements
   @Override
   public void swap(TmpShuffleFile other) throws IOException {
     if (!other.exists()) {
-      String message = "Can only swap with a uncommitted tmp file";
+      val message = "Can only swap with a uncommitted tmp file";
       throw new IOException(message);
     }
 
-    SharedFSTmpShuffleFile otherLocal = (SharedFSTmpShuffleFile) other;
+    val otherLocal = (SharedFSTmpShuffleFile) other;
 
     delete();
 
-    UUID tmpUuid = otherLocal.uuid;
+    val tmpUuid = otherLocal.uuid;
     otherLocal.uuid = this.uuid;
     this.uuid = tmpUuid;
 
-    File tmpFile = this.file;
+    val tmpFile = this.file;
     this.file = otherLocal.file;
     otherLocal.file = tmpFile;
   }
@@ -120,9 +128,10 @@ public class SharedFSTmpShuffleFile extends SharedFSShuffleFile implements
       create();
     }
     if (commitTarget.exists()) {
-      log.warn("commit target already exists, remove '{}'.",
+      val msg = String.format("commit target %s already exists",
           commitTarget.getPath());
-      commitTarget.delete();
+      log.warn(msg);
+      throw new FileAlreadyExistsException(msg);
     }
     log.debug("commit tmp file {} to target file {}.",
         getPath(), getCommitTarget().getPath());
@@ -133,7 +142,7 @@ public class SharedFSTmpShuffleFile extends SharedFSShuffleFile implements
 
   @Override
   public void recall() {
-    SharedFSShuffleFile commitTarget = getCommitTarget();
+    val commitTarget = getCommitTarget();
     if (commitTarget != null) {
       log.info("recall tmp file {} of target file {}.",
           getPath(), commitTarget.getPath());
@@ -148,7 +157,7 @@ public class SharedFSTmpShuffleFile extends SharedFSShuffleFile implements
     try {
       create();
     } catch (IOException e) {
-      String msg = String.format("Create file %s failed.", getPath());
+      val msg = String.format("Create file %s failed.", getPath());
       throw new IllegalArgumentException(msg, e);
     }
     OutputStream ret;
@@ -156,7 +165,7 @@ public class SharedFSTmpShuffleFile extends SharedFSShuffleFile implements
       ret = new FileOutputStream(file, false);
       log.debug("create output stream for {}.", getPath());
     } catch (FileNotFoundException e) {
-      String msg = String.format("File %s not found?", getPath());
+      val msg = String.format("File %s not found?", getPath());
       throw new IllegalArgumentException(msg, e);
     }
     return ret;

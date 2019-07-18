@@ -15,8 +15,12 @@
  */
 package com.memverge.splash;
 
+import java.io.BufferedInputStream;
+import java.io.DataInputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import lombok.val;
+import org.apache.spark.network.util.LimitedInputStream;
 
 public interface ShuffleFile {
 
@@ -29,4 +33,37 @@ public interface ShuffleFile {
   String getPath();
 
   InputStream makeInputStream();
+
+  default DataInputStream makeBufferedDataInputStream() {
+    return new DataInputStream(makeBufferedInputStream());
+  }
+
+  default BufferedInputStream makeBufferedInputStream() {
+    return new BufferedInputStream(makeInputStream(), inputStreamBufferSize());
+  }
+
+  default BufferedInputStream makeBufferedInputStreamWithin(
+      long start, long end) throws IOException {
+    val inputStream = makeInputStream();
+    val skipped = inputStream.skip(start);
+    val defaultBufferSize = inputStreamBufferSize();
+
+    BufferedInputStream ret;
+    if (end >= skipped) {
+      val limit = end - skipped;
+      val bufferSize = (int) Math.min(defaultBufferSize, limit);
+      ret = new BufferedInputStream(
+          new LimitedInputStream(inputStream, limit),
+          bufferSize);
+    } else {
+      ret = new BufferedInputStream(
+          inputStream,
+          defaultBufferSize);
+    }
+    return ret;
+  }
+
+  default int inputStreamBufferSize() {
+    return StorageFactoryHolder.getBufferSize();
+  }
 }

@@ -42,6 +42,11 @@ object SplashOpts {
         .booleanConf
         .createWithDefault(true)
 
+  lazy val spillCheckInterval: ConfigEntry[Int] =
+    createIfNotExists("spark.shuffle.spill.checkInterval", builder => {
+      builder.intConf.createWithDefault(1000)
+    })
+
   // spark options
   lazy val forceSpillElements: ConfigEntry[Int] =
     createIfNotExists("spark.shuffle.spill.numElementsForceSpillThreshold", builder => {
@@ -56,6 +61,11 @@ object SplashOpts {
   lazy val useRadixSort: ConfigEntry[Boolean] =
     createIfNotExists("spark.shuffle.sort.useRadixSort", builder => {
       builder.booleanConf.createWithDefault(true)
+    })
+
+  lazy val serializeBatchSize: ConfigEntry[Long] =
+    createIfNotExists("spark.shuffle.serialize.batchSize", builder => {
+      builder.longConf.createWithDefault(SpilledFile.serializeBatchSize)
     })
 
   lazy val fastMergeEnabled: ConfigEntry[Boolean] =
@@ -84,12 +94,12 @@ object SplashOpts {
   // compatible entries for spark 2.1, scala 2.10, migrated from spark 2.3
   lazy val shuffleFileBufferKB: ConfigEntry[Long] =
     createIfNotExists("spark.shuffle.file.buffer", builder => {
-    builder.doc("Size of the in-memory buffer for each shuffle file output stream, in KiB unless " +
-        "otherwise specified. These buffers reduce the number of disk seeks and system calls " +
-        "made in creating intermediate shuffle files.")
-        .bytesConf(ByteUnit.KiB)
-        .createWithDefaultString("32k")
-  })
+      builder.doc("Size of the in-memory buffer for each shuffle file output stream, in KiB unless " +
+          "otherwise specified. These buffers reduce the number of disk seeks and system calls " +
+          "made in creating intermediate shuffle files.")
+          .bytesConf(ByteUnit.KiB)
+          .createWithDefault(32)
+    })
 
   lazy val bypassSortThreshold: ConfigEntry[Int] =
     createIfNotExists("spark.shuffle.sort.bypassMergeThreshold", builder => {

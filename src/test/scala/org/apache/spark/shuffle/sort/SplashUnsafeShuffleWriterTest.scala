@@ -20,7 +20,6 @@ import com.memverge.splash.shared.SharedFSFactory
 import org.apache.spark._
 import org.apache.spark.internal.config
 import org.apache.spark.io.{LZ4CompressionCodec, LZFCompressionCodec, SnappyCompressionCodec}
-import org.apache.spark.network.util.LimitedInputStream
 import org.apache.spark.scheduler.MapStatus
 import org.apache.spark.security.CryptoStreamUtils
 import org.apache.spark.serializer.{KryoSerializer, Serializer, SerializerManager}
@@ -99,16 +98,14 @@ class SplashUnsafeShuffleWriterTest {
   private def readRecordsFromFile(
       writer: SplashUnsafeShuffleWriter[Int, Int]): List[(Int, Int)] = {
     val recordsList = new ArrayBuffer[(Int, Int)]()
-    var startOffset = 0L
+    var start = 0L
     (0 until reducerNum).foreach { i =>
       val partitionSize = writer.getPartitionLengths(i)
       if (partitionSize > 0) {
         val dataFile = resolver.getDataFile(shuffleId, mapId)
-        val endOffset = startOffset + partitionSize
+        val end = start + partitionSize
         SplashUtils.withResources(
-          new LimitedInputStream(
-            dataFile.makeInputStream(), endOffset)) { is =>
-          is.skip(startOffset)
+          dataFile.makeBufferedInputStreamWithin(start, end)) { is =>
           val in = writer.wrap(is)
           val recordsIs = serializer.newInstance().deserializeStream(in)
           val recordsIterator = recordsIs.asKeyValueIterator
@@ -118,7 +115,7 @@ class SplashUnsafeShuffleWriterTest {
             recordsList.append(record)
           }
           recordsIs.close()
-          startOffset += partitionSize
+          start += partitionSize
         }
       }
     }
