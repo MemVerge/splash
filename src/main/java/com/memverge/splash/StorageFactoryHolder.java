@@ -44,6 +44,13 @@ public class StorageFactoryHolder {
 
   private int bufferSize = 32 * 1024;
 
+  public static void setDefaultFactoryName(String factoryName) {
+    INSTANCE.defaultFactoryName = factoryName;
+  }
+
+  private String defaultFactoryName =
+      SplashOpts.storageFactoryName().defaultValueString();
+
   private SparkConf conf = null;
 
   public static void setSparkConf(SparkConf sparkConf) {
@@ -63,7 +70,7 @@ public class StorageFactoryHolder {
           if (conf != null) {
             clzName = conf.get(SplashOpts.storageFactoryName());
           } else {
-            clzName = SplashOpts.storageFactoryName().defaultValueString();
+            clzName = defaultFactoryName;
           }
           factory = initFactory(clzName);
         }

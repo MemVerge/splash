@@ -22,6 +22,7 @@ import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.InputStream;
 import lombok.val;
+import org.apache.commons.io.FileUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -44,7 +45,18 @@ public class SharedFSShuffleFile implements ShuffleFile {
   @Override
   public boolean delete() {
     log.debug("delete file {}", getPath());
-    return file.delete();
+    boolean success = true;
+    try {
+      if (file.isDirectory()) {
+        FileUtils.deleteDirectory(file);
+      } else {
+        FileUtils.forceDelete(file);
+      }
+    } catch (IOException e) {
+      log.error("delete {} failed.", getPath(), e);
+      success = false;
+    }
+    return success;
   }
 
   @Override

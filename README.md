@@ -37,6 +37,7 @@ We want to address these issues in this shuffle manager.
 * [Build](#build)
 * [Options](#options)
 * [Plugin Development](#plugin-development)
+* [Shuffle Performance Tool](#shuffle-performance-tool)
 
 ---
 
@@ -168,3 +169,70 @@ spark.shuffle.splash.folder /your/share/folder
 ```
 * Make sure that all your Spark nodes can access the shared folder you specified in the configuration file.
 * Run some sample Spark applications and you should be able to observe that the application folder is created in a shared folder.
+
+## Shuffle Performance Tool
+
+Use this tool to verify the performance of the storage plugin.  Users could
+also use this tool to compare different storage plugin implementations or find
+the regressions of the storage plugin.
+
+Note that this tool bases on the storage interface.  It does not require a Spark
+environment.
+
+It writes the shuffle output and read them with configured arguments.  See the
+configuration details below:
+
+* `-h` or `--help`: display the usage
+* `-f` or `--factory`: specify the name of the storage factory
+* `-i` or `--shuffleId`: the test shuffle ID, default to 1
+* `-t` or `--tasks`: the number of concurrent tasks, default to 5
+* `-m` or `--mappers`: the number of mappers, default to 10
+* `-r` or `--reducers`: the number of reducers, default to 10
+* `-d` or `--data`: the number of data blocks, default to 1K
+* `-b` or `--blockSize`: the block/buffer size of each data block,
+  default to 256K
+* `-o` or `--overwrite`: overwrite existing outputs
+
+Sample command:
+```
+java -cp target/splash-shaded.jar com.memverge.splash.ShufflePerfTool 
+-d 64 -m 200 -r 200 -t 8 -o
+```
+
+Sample output
+```
+overwrite, removing existing shuffle for shuffleTest-1                                        
+==========================================                                                    
+Writing 200 shuffle with 8 threads: 100% (200/200)                                            
+Write shuffle data completed in 7440 milliseconds                                             
+    Reading index file:  0 ms                                                                 
+    storage factory:     com.memverge.splash.shared.SharedFSFactory                           
+    shuffle folder:      \tmp\splash\shuffleTest-1\shuffle 
+    number of mappers:   200                                                                  
+    number of reducers:  200                                                                  
+    total shuffle size:  3GB                                                                  
+    bytes written:       3GB                                                                  
+    bytes read:          0B                                                                   
+    number of blocks:    64                                                                   
+    blocks size:         256KB                                                                
+    partition size:      81KB                                                                 
+    concurrent tasks:    8                                                                    
+    bandwidth:           430MB/s                                                              
+                                                                                              
+==========================================                                                    
+Reading 40000 partitions with 8 threads   100% (40000/40000)                                   
+Read shuffle data completed in 35525 milliseconds                                             
+    Reading index file:  15907 ms                                                             
+    storage factory:     com.memverge.splash.shared.SharedFSFactory                           
+    shuffle folder:      \tmp\splash\shuffleTest-1\shuffle 
+    number of mappers:   200                                                                  
+    number of reducers:  200                                                                  
+    total shuffle size:  3GB                                                                  
+    bytes written:       3GB                                                                  
+    bytes read:          3GB                                                                  
+    number of blocks:    64                                                                   
+    blocks size:         256KB                                                                
+    partition size:      81KB                                                                 
+    concurrent tasks:    8                                                                    
+    bandwidth:           90MB/s                                                               
+```
