@@ -7,7 +7,7 @@
 
   <groupId>com.memverge</groupId>
   <artifactId>splash</artifactId>
-  <version>0.6.0</version>
+  <version>0.6.1</version>
   <name>splash</name>
   <description>A shuffle manager that contains a storage interface.</description>
   <url>https://github.com/MemVerge/splash/</url>
@@ -113,14 +113,12 @@
       <groupId>org.scala-lang</groupId>
       <artifactId>scala-library</artifactId>
       <version>${scala.version}</version>
-      <scope>provided</scope>
     </dependency>
     <!-- hdfs integration dependencies -->
     <dependency>
       <groupId>org.apache.hadoop</groupId>
       <artifactId>hadoop-common</artifactId>
       <version>${hadoop.version}</version>
-      <scope>provided</scope>
       <exclusions>
         <exclusion>
           <groupId>org.slf4j</groupId>
@@ -132,7 +130,6 @@
       <groupId>org.apache.hadoop</groupId>
       <artifactId>hadoop-client</artifactId>
       <version>${hadoop.version}</version>
-      <scope>provided</scope>
       <exclusions>
         <exclusion>
           <groupId>org.slf4j</groupId>
@@ -144,7 +141,6 @@
       <groupId>org.apache.spark</groupId>
       <artifactId>spark-core_${scala.compat.version}</artifactId>
       <version>${spark.version}</version>
-      <scope>provided</scope>
       <exclusions>
         <exclusion>
           <groupId>org.slf4j</groupId>

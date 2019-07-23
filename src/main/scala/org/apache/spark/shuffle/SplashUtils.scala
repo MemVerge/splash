@@ -26,7 +26,7 @@ import org.apache.spark.internal.Logging
 
 import scala.util.control.NonFatal
 
-private[spark] object SplashUtils extends Logging {
+object SplashUtils extends Logging {
   def withResources[T <: AutoCloseable, V](r: => T)(f: T => V): V = {
     val resource: T = r
     require(resource != null, "resource is null")
