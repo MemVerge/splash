@@ -25,9 +25,8 @@ import java.util.concurrent.{CountDownLatch, Executors}
 
 import org.apache.commons.cli.{DefaultParser, HelpFormatter, MissingOptionException, Options, ParseException, UnrecognizedOptionException}
 import org.apache.spark.SparkException
-import org.apache.spark.network.util.LimitedInputStream
-import org.apache.spark.shuffle.{SplashOpts, SplashUtils}
-import org.apache.spark.storage.ShuffleBlockId
+import org.apache.spark.shuffle.{SplashOpts, SplashShuffleBlockResolver, SplashUtils}
+import org.apache.spark.storage.{BlockId, ShuffleBlockId}
 
 import scala.util.Random
 
@@ -51,7 +50,8 @@ object ShufflePerfTool {
           Integer.parseInt(cmd.getOptionValue("r", "10")),
           Integer.parseInt(cmd.getOptionValue("d", "1024")),
           Integer.parseInt(cmd.getOptionValue("b", "262144")),
-          overwrite = cmd.hasOption("o")))
+          overwrite = cmd.hasOption("o"),
+          readOnly = cmd.hasOption("ro")))
       }
     } catch {
       case e@(_: UnrecognizedOptionException | _: MissingOptionException) =>
@@ -74,6 +74,7 @@ object ShufflePerfTool {
     options.addOption("d", "data", true, "# of data blocks")
     options.addOption("b", "blockSize", true, "block/buffer size")
     options.addOption("o", "overwrite", false, "overwrite existing outputs")
+    options.addOption("ro", "readOnly", false, "read only, do not perform shuffle write")
     options
   }
 
@@ -87,7 +88,8 @@ object ShufflePerfTool {
       dataBlocks: Int,
       blockSize: Int,
       readBufferSize: Int = 256 * 1024,
-      overwrite: Boolean) {
+      overwrite: Boolean = false,
+      readOnly: Boolean = false) {
 
     StorageFactoryHolder.setDefaultFactoryName(factoryName)
 
@@ -95,19 +97,28 @@ object ShufflePerfTool {
     private val shuffleSize: Long = dataBlocks * blockSize
     private val partitionSize = shuffleSize / reducers
     private val totalShuffleSize = shuffleSize * mappers
-    private val factory = StorageFactoryHolder.getFactory
 
     private val bytesWritten = new AtomicLong(0)
     private val bytesRead = new AtomicLong(0)
     private val totalTimeReadIndex = new AtomicLong(0)
+    private val totalTimeReadData = new AtomicLong(0)
+
+    @volatile
     private var latestProgress = ""
 
-    private def shuffleFolder = factory.getShuffleFolder(appId)
+    private val resolver = new SplashShuffleBlockResolver(appId)
+
+    private def shuffleFolder = resolver.shuffleFolder
 
     def writeShuffle(): String = {
+      if (readOnly) {
+        return "Read only specified.  Skip shuffle write.\n" +
+            "Assume that the shuffle output files already exist."
+      }
+
       if (overwrite) {
         println(s"overwrite, removing existing shuffle for $appId")
-        factory.cleanShuffle(appId)
+        resolver.cleanup()
       }
 
       val start = System.nanoTime()
@@ -143,17 +154,18 @@ object ShufflePerfTool {
     }
 
     private def printProgress(done: Int, total: Int): Unit = {
-      if (done == 0) latestProgress = ""
-      val len = latestProgress.length
-      val goBack = Array.fill(len)("\b").mkString("")
-      val percent = done * 100 / total
-      latestProgress = f" $percent%3d%% ($done/$total)"
-      print(goBack + latestProgress)
+      // update the progress every 1%
+      if (done == total || (done * 100) % total == 0) {
+        if (done == 0) latestProgress = ""
+        val goBack = Array.fill(latestProgress.length)("\b").mkString("")
+        val detail = s"($done/$total)"
+        latestProgress = f" ${done * 100 / total}%3d%% $detail%20s"
+        print(goBack + latestProgress)
+      }
     }
 
     private def writeIndexFile(shuffleId: Int, mapperId: Int): Unit = {
-      val blockId = ShuffleBlockId(shuffleId, mapperId, 0)
-      val indexFile = factory.makeIndexFile(s"$shuffleFolder/$blockId.index")
+      val indexFile = resolver.getIndexTmpFile(shuffleId, mapperId)
       val partitionSize = shuffleSize / reducers
       SplashUtils.withResources {
         new DataOutputStream(
@@ -169,8 +181,7 @@ object ShufflePerfTool {
     }
 
     private def writeDataFile(shuffleId: Int, mapperId: Int): Unit = {
-      val blockId = ShuffleBlockId(shuffleId, mapperId, 0)
-      val dataFile = factory.makeDataFile(s"$shuffleFolder/$blockId.data")
+      val dataFile = resolver.getDataTmpFile(shuffleId, mapperId)
       val rand = new Random
       val buffer = new Array[Byte](blockSize)
       SplashUtils.withResources {
@@ -204,12 +215,16 @@ object ShufflePerfTool {
                 val partitionId = ShuffleBlockId(shuffleId, m, r)
                 getPartitionIS(partitionId) match {
                   case Some(is) =>
-                    val toRead = is.available()
-                    val buffer = new Array[Byte](readBufferSize)
-                    (0 to toRead / buffer.length).foreach { _ =>
-                      bytesRead.addAndGet(is.read(buffer))
+                    SplashUtils.withResources(is) { is =>
+                      val readDataStart = System.nanoTime
+                      val toRead = is.available()
+                      val buffer = new Array[Byte](readBufferSize)
+                      (0 to toRead / buffer.length).foreach { _ =>
+                        bytesRead.addAndGet(is.read(buffer))
+                      }
+                      val delta = System.nanoTime - readDataStart
+                      totalTimeReadData.addAndGet(delta)
                     }
-
                   case None =>
                     throw new SparkException(s"read $partitionId failed.")
                 }
@@ -235,46 +250,34 @@ object ShufflePerfTool {
     private def getSummaryString(op: String, duration: Duration): String = {
       StorageFactoryHolder.onApplicationEnd()
       val readIndexTook = Duration.ofNanos(totalTimeReadIndex.get())
+      val readDataTook = Duration.ofNanos(totalTimeReadData.get())
       val bandwidth = totalShuffleSize * 1000 / duration.toMillis
+      val scale = toSizeStr(1024L)(_)
       s"""|$op completed in ${duration.toMillis} milliseconds
           |    Reading index file:  ${readIndexTook.toMillis} ms
-          |    storage factory:     ${factory.getClass.getCanonicalName}
+          |    Reading data file:   ${readDataTook.toMillis} ms
+          |    storage factory:     ${resolver.getStorageFactoryClassName}
           |    shuffle folder:      $shuffleFolder
           |    number of mappers:   $mappers
           |    number of reducers:  $reducers
-          |    total shuffle size:  ${toSizeStr(totalShuffleSize)}
-          |    bytes written:       ${toSizeStr(bytesWritten.get())}
-          |    bytes read:          ${toSizeStr(bytesRead.get())}
+          |    total shuffle size:  ${scale(totalShuffleSize)}B
+          |    bytes written:       ${scale(bytesWritten.get())}B
+          |    bytes read:          ${scale(bytesRead.get())}B
           |    number of blocks:    $dataBlocks
-          |    blocks size:         ${toSizeStr(blockSize)}
-          |    partition size:      ${toSizeStr(partitionSize)}
+          |    blocks size:         ${scale(blockSize)}B
+          |    partition size:      ${scale(partitionSize)}B
           |    concurrent tasks:    $tasks
-          |    bandwidth:           ${toSizeStr(bandwidth)}/s
+          |    bandwidth:           ${scale(bandwidth)}B/s
           |""".stripMargin
     }
 
     private def getPartitionIS(blockId: ShuffleBlockId): Option[InputStream] = {
-      val fileId = ShuffleBlockId(blockId.shuffleId, blockId.mapId, 0)
-      val indexFile = factory.getIndexFile(s"$shuffleFolder/$fileId.index")
-      val dataFile = factory.getDataFile(s"$shuffleFolder/$fileId.data")
       val start = System.nanoTime()
-      try
-        SplashUtils.withResources {
-          val indexIs = indexFile.makeInputStream()
-          indexIs.skip(blockId.reduceId * 8L)
-          new DataInputStream(new BufferedInputStream(indexIs, 16))
-        } { is =>
-
-          val offset = is.readLong()
-          val nextOffset = is.readLong()
-
-          totalTimeReadIndex.addAndGet(System.nanoTime() - start)
-          bytesRead.addAndGet(8 * 2)
-
-          val dataIs = new LimitedInputStream(dataFile.makeInputStream(), nextOffset)
-          dataIs.skip(offset)
-          Some(new BufferedInputStream(dataIs, readBufferSize))
-        }
+      try {
+        val ret = resolver.getBlockData(blockId.asInstanceOf[BlockId]).map(_.is)
+        totalTimeReadIndex.addAndGet(System.nanoTime() - start)
+        ret
+      }
       catch {
         case _: IOException => None
       }
@@ -293,22 +296,21 @@ object ShufflePerfTool {
     }
   }
 
-  private def toSizeStr(size: Long): String = {
-    val scale = 1024L
+  private def toSizeStr(scale: Long)(size: Long): String = {
     val kbScale: Long = scale
     val mbScale: Long = scale * kbScale
     val gbScale: Long = scale * mbScale
     val tbScale: Long = scale * gbScale
     if (size > tbScale) {
-      size / tbScale + "TB"
+      size / tbScale + "T"
     } else if (size > gbScale) {
-      size / gbScale + "GB"
+      size / gbScale + "G"
     } else if (size > mbScale) {
-      size / mbScale + "MB"
+      size / mbScale + "M"
     } else if (size > kbScale) {
-      size / kbScale + "KB"
+      size / kbScale + "K"
     } else {
-      size + "B"
+      size + ""
     }
   }
 

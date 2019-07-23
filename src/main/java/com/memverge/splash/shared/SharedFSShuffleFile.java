@@ -47,11 +47,9 @@ public class SharedFSShuffleFile implements ShuffleFile {
     log.debug("delete file {}", getPath());
     boolean success = true;
     try {
-      if (file.isDirectory()) {
-        FileUtils.deleteDirectory(file);
-      } else {
-        FileUtils.forceDelete(file);
-      }
+      FileUtils.forceDelete(file);
+    } catch (FileNotFoundException e) {
+      log.info("file to delete {} not found", file.getAbsolutePath());
     } catch (IOException e) {
       log.error("delete {} failed.", getPath(), e);
       success = false;
@@ -90,9 +88,11 @@ public class SharedFSShuffleFile implements ShuffleFile {
     val tgtFile = new File(tgtId);
     val parent = tgtFile.getParentFile();
     if (!parent.exists() && !parent.mkdirs()) {
-      val msg = String.format("create parent folder %s failed",
-          parent.getAbsolutePath());
-      throw new IOException(msg);
+      if (!parent.exists()) {
+        val msg = String.format("create parent folder %s failed",
+            parent.getAbsolutePath());
+        throw new IOException(msg);
+      }
     }
     boolean success = file.renameTo(tgtFile);
     if (success) {

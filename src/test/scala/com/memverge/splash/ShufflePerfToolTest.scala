@@ -3,14 +3,15 @@ package com.memverge.splash
 import java.time.Duration
 
 import org.assertj.core.api.Assertions.assertThat
-import org.testng.annotations.{BeforeMethod, Test}
+import org.testng.annotations.{AfterMethod, BeforeMethod, Test}
 
 @Test(groups = Array("UnitTest", "IntegrationTest"))
 class ShufflePerfToolTest {
   @BeforeMethod
-  private def beforeMethod(): Unit = {
-    StorageFactoryHolder.getFactory.reset()
-  }
+  private def beforeMethod(): Unit = afterMethod
+
+  @AfterMethod
+  private def afterMethod(): Unit = StorageFactoryHolder.getFactory.reset()
 
   def testUsage(): Unit = {
     val ret = ShufflePerfTool.parse(Array("-h"))
@@ -18,10 +19,15 @@ class ShufflePerfToolTest {
   }
 
   def testWriteReadShuffleWithDefaultConfig(): Unit = {
-    val start = System.nanoTime()
+    val start1 = System.nanoTime()
     ShufflePerfTool.execute(Array("-b", "1024"))
-    val duration = Duration.ofNanos(System.nanoTime() - start)
-    assertThat(duration.toMillis).isLessThan(2000)
+    val duration1 = Duration.ofNanos(System.nanoTime() - start1)
+    assertThat(duration1.toMillis).isLessThan(2000)
+
+    val start2 = System.nanoTime()
+    ShufflePerfTool.execute(Array("-b", "1024", "-ro"))
+    val duration2 = Duration.ofNanos(System.nanoTime() - start2)
+    assertThat(duration2.toMillis).isLessThan(duration1.toMillis)
   }
 
   def testInvalidIntParameter(): Unit = {
