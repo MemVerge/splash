@@ -21,6 +21,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import lombok.val;
 import org.apache.spark.network.util.LimitedInputStream;
+import org.apache.spark.shuffle.PartitionLoc;
 
 public interface ShuffleFile {
 
@@ -40,6 +41,11 @@ public interface ShuffleFile {
 
   default BufferedInputStream makeBufferedInputStream() {
     return new BufferedInputStream(makeInputStream(), inputStreamBufferSize());
+  }
+
+  default BufferedInputStream makeBufferedInputStreamWithin(
+      PartitionLoc loc) throws IOException {
+    return makeBufferedInputStreamWithin(loc.start(), loc.end());
   }
 
   default BufferedInputStream makeBufferedInputStreamWithin(

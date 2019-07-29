@@ -128,6 +128,7 @@ class SplashShuffleManager(conf: SparkConf) extends ShuffleManager with Logging 
    */
   override def unregisterShuffle(shuffleId: Int): Boolean = {
     logInfo(s"unregister shuffle $shuffleId of app ${conf.getAppId}")
+    shuffleBlockResolver.invalidateShuffleCache(shuffleId)
     Option(numMapsForShuffle.remove(shuffleId)).foreach { numMaps =>
       if (isDriver && conf.get(SplashOpts.clearShuffleOutput)) {
         logInfo(s"remove shuffle $shuffleId data with $numMaps mappers.")
@@ -144,10 +145,10 @@ class SplashShuffleManager(conf: SparkConf) extends ShuffleManager with Logging 
     StorageFactoryHolder.onApplicationEnd()
     if (conf.contains("spark.app.id")) {
       logInfo(s"stop shuffle manager for app ${conf.getAppId}")
+      shuffleBlockResolver.stop()
       if (isDriver && conf.get(SplashOpts.clearShuffleOutput)) {
         shuffleBlockResolver.cleanup()
       }
-      shuffleBlockResolver.stop()
     } else {
       logInfo("app id is not available, app may not start yet.")
     }

@@ -74,6 +74,7 @@ public class ManualCloseOutputStreamTest {
     }
   }
 
+  @SuppressWarnings("deprecation")
   public void testMetrics() throws IOException {
     val metrics = new ShuffleWriteMetrics();
     val file = factory.makeSpillFile();

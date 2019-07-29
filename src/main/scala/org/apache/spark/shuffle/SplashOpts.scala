@@ -42,6 +42,12 @@ object SplashOpts {
         .booleanConf
         .createWithDefault(true)
 
+  lazy val shuffleCacheSize: ConfigEntry[Int] =
+    ConfigBuilder("spark.shuffle.splash.cacheSize")
+        .doc("max number of shuffles to cache.")
+        .intConf
+        .createWithDefault(10)
+
   lazy val spillCheckInterval: ConfigEntry[Int] =
     createIfNotExists("spark.shuffle.spill.checkInterval", builder => {
       builder.intConf.createWithDefault(1000)
