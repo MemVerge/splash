@@ -28,7 +28,7 @@ import org.testng.annotations.Test
 class SplashShuffleManagerTest {
   def testVersion(): Unit = {
     val version = SplashShuffleManager.version
-    assertThat(version).matches("\\d+\\.\\d+(\\.\\d+)+")
+    assertThat(version).matches("\\d+\\.\\d+(\\.\\d+)+(-\\S+)?")
   }
 
   def testStopWithoutApp(): Unit = {

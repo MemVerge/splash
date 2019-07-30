@@ -1,0 +1,64 @@
+#!/bin/sh
+#
+# a script for building Splash for multiple Spark and Hadoop versions.  Support three
+# Parameters:
+#  * 1st argument: operation like `install`, `test` or `deploy`.  Default to `package`
+#  * 2nd argument: Spark versions.  Check the default value in the script.
+#  * 3rd argument: Hadoop versions.  Check the default value in the script.
+#
+# Example:
+#  ./batch install "2.1.0 2.3.0" 2.7.1
+#
+set -e
+
+OPERATION=${1:-package}
+SPARK_VERSIONS=${2:-"2.1.0 2.3.0 2.3.2 2.3.3 2.4.2 2.4.3"}
+HADOOP_VERSIONS=${3:-"2.6.5 2.7.1 2.7.4"}
+
+current_version=$(mvn help:evaluate -Dexpression=project.version -q -DforceStdout)
+current_spark=$(mvn dependency:tree | grep spark-core | awk -F':' '{print $4}')
+current_hadoop=$(mvn dependency:tree | grep hadoop-common | awk -F':' '{print $4}')
+
+
+function set_version {
+    local splash_version=$1
+    local spark_version=$2
+    local hadoop_version=$3
+
+    echo "Update POM file, set Splash version to $splash_version, Spark to $spark_version, Hadoop to $hadoop_version"
+    mvn versions:set -DnewVersion=${splash_version}
+    mvn versions:set-property -Dproperty=spark.version -DnewVersion=${spark_version}
+    mvn versions:set-property -Dproperty=hadoop.version -DnewVersion=${hadoop_version}
+    mvn versions:commit
+}
+
+
+function do_build {
+    local spark_version=$1
+    local hadoop_version=$2
+    local operation=$3
+
+    local splash_version=${current_version}-spark-${spark_version}-hadoop-${hadoop_version}
+
+    set_version $splash_version $spark_version $hadoop_version
+    mvn clean $operation
+}
+
+
+function restore_version {
+    echo "Restore versions in the POM file."
+    set_version $current_version $current_spark $current_hadoop
+}
+
+
+trap restore_version EXIT
+
+
+for SPARK_VERSION in $SPARK_VERSIONS
+do
+    for HADOOP_VERSION in $HADOOP_VERSIONS
+    do
+        do_build $SPARK_VERSION $HADOOP_VERSION $OPERATION
+    done
+done
+
