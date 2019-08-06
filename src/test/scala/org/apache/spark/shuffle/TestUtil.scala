@@ -44,8 +44,11 @@ object TestUtil {
    * @param conf spark conf
    */
   private def newMemoryManager(conf: SparkConf): MemoryManager = {
-    val onHeapStorageMemory = 100 * 1024 * 1024
-    val onHeapExeMemory = 200 * 1024 * 1024
+
+    def onHeapStorageMemory = conf.get(SplashOpts.maxStorageMemory)
+
+    def onHeapExeMemory = conf.get(SplashOpts.maxExeMemory)
+
     val cores = 4
     new MemoryManager(
       conf, cores, onHeapStorageMemory, onHeapExeMemory) {
@@ -69,8 +72,15 @@ object TestUtil {
           numBytes: Long,
           taskAttemptId: Long,
           memoryMode: MemoryMode): Long = {
-        executionMemory.addAndGet(numBytes)
-        numBytes
+        val maxOnHeapExeMemory = onHeapExeMemory
+        if (numBytes + executionMemory.get() <= maxOnHeapExeMemory) {
+          executionMemory.addAndGet(numBytes)
+          numBytes
+        } else {
+          val remain = maxOnHeapExeMemory - executionMemory.get()
+          executionMemory.addAndGet(remain)
+          remain
+        }
       }
 
       override def releaseExecutionMemory(

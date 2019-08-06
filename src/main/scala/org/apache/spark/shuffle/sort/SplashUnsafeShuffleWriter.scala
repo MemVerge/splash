@@ -24,7 +24,6 @@ import java.io._
 
 import com.google.common.io.Closeables
 import com.memverge.splash.TmpShuffleFile
-import org.apache.commons.io.IOUtils
 import org.apache.commons.io.output.CountingOutputStream
 import org.apache.spark.internal.Logging
 import org.apache.spark.io.CompressionCodec
@@ -32,7 +31,6 @@ import org.apache.spark.network.util.LimitedInputStream
 import org.apache.spark.scheduler.MapStatus
 import org.apache.spark.shuffle._
 import org.apache.spark.storage.TimeTrackingOutputStream
-import org.apache.spark.unsafe.Platform
 import org.apache.spark.{SparkEnv, TaskContext}
 
 private[spark] class SplashUnsafeShuffleWriter[K, V](
@@ -61,14 +59,6 @@ private[spark] class SplashUnsafeShuffleWriter[K, V](
     conf,
     serializer)
   private var spilled = 0
-  private var serBuffer = MyByteArrayOutputStream(
-    SplashUnsafeShuffleWriter.defaultInitialSerBufferSize)
-  private var serOutputStream = serializer.serializeStream(serBuffer)
-
-  private case class MyByteArrayOutputStream(bufSize: Int)
-      extends ByteArrayOutputStream(bufSize) {
-    def getBuf: Array[Byte] = buf
-  }
 
   private def updatePeakMemoryUsed(): Unit = {
     if (sorter != null) {
@@ -79,7 +69,7 @@ private[spark] class SplashUnsafeShuffleWriter[K, V](
     }
   }
 
-  def getSpilled: Int = spilled
+  def getSpilled: Int = if (sorter != null) sorter.getSpilled else spilled
 
   def getPeakMemoryUsedBytes: Long = {
     updatePeakMemoryUsed()
@@ -93,9 +83,7 @@ private[spark] class SplashUnsafeShuffleWriter[K, V](
     // generic throwables.
     var success = false
     try {
-      while (records.hasNext) {
-        insertRecordIntoSorter(records.next)
-      }
+      writeRecords(records)
       closeAndWriteOutput()
       success = true
     } finally {
@@ -116,11 +104,15 @@ private[spark] class SplashUnsafeShuffleWriter[K, V](
     }
   }
 
+  private[sort] def writeRecords(records: Iterator[Product2[K, V]]): Unit = {
+    while (records.hasNext) {
+      insertRecordIntoSorter(records.next)
+    }
+  }
+
   def closeAndWriteOutput(): Unit = {
     assert(sorter != null)
     updatePeakMemoryUsed()
-    serBuffer = null
-    serOutputStream = null
     val spills = sorter.closeAndGetSpills()
     spilled = spills.length
     sorter = null
@@ -145,31 +137,13 @@ private[spark] class SplashUnsafeShuffleWriter[K, V](
 
   private[spark] def insertRecordIntoSorter(record: Product2[K, V]): Unit = {
     assert(sorter != null)
-    val key = record._1
-    val partitionId = partitioner.getPartition(key)
-    serBuffer.reset()
-    serOutputStream.writeKey(key.asInstanceOf[Object])
-    serOutputStream.writeValue(record._2.asInstanceOf[Object])
-    serOutputStream.flush()
-
-    val serializedRecordSize = serBuffer.size()
-    assert(serializedRecordSize > 0)
-
-    sorter.insertRecord(
-      serBuffer.getBuf,
-      Platform.BYTE_ARRAY_OFFSET,
-      serializedRecordSize,
-      partitionId)
+    val partitionId = partitioner.getPartition(record._1)
+    sorter.insertRecord(record, partitionId)
   }
 
-  private[spark] def wrap(is: InputStream): InputStream = {
-    serializer.wrap(is)
-  }
+  private[spark] def wrap(is: InputStream): InputStream = serializer.wrap(is)
 
-  private[spark] def forceSorterToSpill(): Unit = {
-    assert(sorter != null)
-    sorter.spill()
-  }
+  private[spark] def forceSorterToSpill(): Unit = sorter.spill()
 
   def mergeSpills(spills: Array[ShuffleSpillInfo], dataTmp: TmpShuffleFile): Array[Long] = {
     val compressionEnabled = conf.get(SplashOpts.shuffleCompress)
@@ -178,6 +152,7 @@ private[spark] class SplashUnsafeShuffleWriter[K, V](
     val fastMergeSupported = !compressionEnabled ||
         CompressionCodec.supportsConcatenationOfSerializedStreams(compressionCodec)
 
+    logInfo(s"merge ${spills.length} with ${partitioner.numPartitions} partitions.")
     try {
       if (spills.length == 0) {
         new Array[Long](partitioner.numPartitions)
@@ -190,13 +165,12 @@ private[spark] class SplashUnsafeShuffleWriter[K, V](
         dataTmp.swap(firstSpill)
         spills(0).partitionLengths
       } else {
-        var partitionLengths: Array[Long] = null
-        if (fastMergeEnabled && fastMergeSupported) {
+        val partitionLengths = if (fastMergeEnabled && fastMergeSupported) {
           logDebug("Using fileStream-based fast merge")
-          partitionLengths = mergeSpillsWithStream(spills, dataTmp, None)
+          mergeSpillsWithStream(spills, dataTmp, None)
         } else {
           logDebug("Using slow merge")
-          partitionLengths = mergeSpillsWithStream(spills, dataTmp, Some(compressionCodec))
+          mergeSpillsWithStream(spills, dataTmp, Some(compressionCodec))
         }
         writeMetrics.decBytesWritten(spills(spills.length - 1).spillSize)
         writeMetrics.incBytesWritten(partitionLengths.sum)
@@ -216,14 +190,12 @@ private[spark] class SplashUnsafeShuffleWriter[K, V](
     val numPartitions = partitioner.numPartitions
     val partitionLengths = new Array[Long](numPartitions)
 
-    val mergedOs = new CountingOutputStream(tmpData.makeBufferedOutputStream())
+    val mergedOs = new CountingOutputStream(tmpData.makeOutputStream())
 
     var threwException = true
     var spillIss: Seq[InputStream] = Seq.empty
     try {
-      spillIss = spills.indices.map { i =>
-        spills(i).file.makeBufferedInputStream()
-      }
+      spillIss = spills.indices.map(spills(_).file.makeInputStream())
       (0 until numPartitions).foreach { partition =>
         val initialFileLength = mergedOs.getByteCount
         val partitionOutput: OutputStream =
@@ -232,6 +204,7 @@ private[spark] class SplashUnsafeShuffleWriter[K, V](
               new TimeTrackingOutputStream(writeMetrics, mergedOs)),
             compressionCodecOpt)
 
+        val buffer = new Array[Byte](tmpData.getBufferSize)
         spills.indices.foreach { i =>
           val partitionLengthInSpill = spills(i).partitionLengths(partition)
           if (partitionLengthInSpill > 0) {
@@ -242,7 +215,7 @@ private[spark] class SplashUnsafeShuffleWriter[K, V](
                   partitionLengthInSpill.toInt,
                   false),
                 compressionCodecOpt)
-            }(IOUtils.copy(_, partitionOutput))
+            }(SplashUtils.copy(_, partitionOutput, buffer))
           }
         }
         partitionOutput.flush()
@@ -288,8 +261,4 @@ private[spark] class SplashUnsafeShuffleWriter[K, V](
       }
     }
   }
-}
-
-private[spark] object SplashUnsafeShuffleWriter {
-  private val defaultInitialSerBufferSize = 1024 * 1024
 }

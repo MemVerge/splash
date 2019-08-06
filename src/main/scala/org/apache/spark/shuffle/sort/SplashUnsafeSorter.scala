@@ -20,6 +20,7 @@
  */
 package org.apache.spark.shuffle.sort
 
+import java.io.ByteArrayOutputStream
 import java.util.UUID
 
 import com.memverge.splash.StorageFactoryHolder
@@ -70,6 +71,8 @@ private[spark] class SplashUnsafeSorter(
   private val numElementsForSpillThreshold: Int = conf.get(SplashOpts.forceSpillElements)
   private val useRadixSort = conf.get(SplashOpts.useRadixSort)
 
+  private var serBuffer = BufferedByteArrayOutputStream()
+  private var serOutputStream = serializer.serializeStream(serBuffer)
   private var inMemSorter =
     new ShuffleInMemorySorter(this, initialSize, useRadixSort)
 
@@ -90,16 +93,12 @@ private[spark] class SplashUnsafeSorter(
    *                   counted towards shuffle spill metrics rather than
    *                   shuffle write metrics.
    */
-  private def writeSortedFile(isLastFile: Boolean): Unit = {
+  private[sort] def writeSortedFile(isLastFile: Boolean): Unit = {
     val writeMetricsToUse = if (isLastFile) writeMetrics else new ShuffleWriteMetrics
 
     // This call performs the actual sort
     val sortedRecords = inMemSorter.getSortedIterator
 
-    val fileBufferSize = storageFactory.getFileBufferSize
-
-    // cache to buffer small writes
-    val writeBuffer = new Array[Byte](fileBufferSize)
     val blockId = TempShuffleBlockId(UUID.randomUUID())
 
     val tmpSpillFile = storageFactory.makeSpillFile()
@@ -129,24 +128,11 @@ private[spark] class SplashUnsafeSorter(
       val recordPointer = sortedRecords.packedRecordPointer.getRecordPointer
       val recordPage = taskMemoryManager.getPage(recordPointer)
       val recordOffsetInPage = taskMemoryManager.getOffsetInPage(recordPointer)
-      var dataRemaining = Platform.getInt(recordPage, recordOffsetInPage)
-      var recordReadPosition = recordOffsetInPage + 4 // skip record length
-      while (dataRemaining > 0) {
-        val toTransfer = Math.min(fileBufferSize, dataRemaining)
-        Platform.copyMemory(
-          recordPage,
-          recordReadPosition,
-          writeBuffer,
-          Platform.BYTE_ARRAY_OFFSET,
-          toTransfer)
-        writer.write(writeBuffer, 0, toTransfer)
-        recordReadPosition += toTransfer
-        dataRemaining -= toTransfer
-      }
+      val dataRemaining = Platform.getInt(recordPage, recordOffsetInPage)
+      val recordReadPosition = recordOffsetInPage + 4 // skip record length
+      writer.write(recordPage, recordReadPosition, dataRemaining)
     }
-
-    val written = writer.commitAndGet()
-    writer.close()
+    val written = writer.closeAndGet()
 
     // If `writeSortedFile()` was called from `closeAndGetSpills()` and no records were inserted,
     // then the file might be empty. Note that it might be better to avoid calling
@@ -238,19 +224,6 @@ private[spark] class SplashUnsafeSorter(
   }
 
   /**
-   * Force all memory and spill files to be deleted;
-   * called by shuffle error-handling code.
-   */
-  def cleanupResources(): Unit = {
-    freeMemory()
-    if (inMemSorter != null) {
-      inMemSorter.free()
-      inMemSorter = null
-    }
-    spills.foreach(_.file.delete())
-  }
-
-  /**
    * Checks whether there is enough space to insert an additional record in to
    * the sort pointer array and grows the array if additional space is
    * required. If the required space cannot be obtained, then the in-memory
@@ -309,10 +282,27 @@ private[spark] class SplashUnsafeSorter(
     }
   }
 
+  def insertRecord[K, V](record: Product2[K, V], partitionId: Int): Unit = {
+    val key = record._1
+    serBuffer.reset()
+    serOutputStream.writeKey(key.asInstanceOf[Object])
+    serOutputStream.writeValue(record._2.asInstanceOf[Object])
+    serOutputStream.flush()
+
+    val serializedRecordSize = serBuffer.size()
+    assert(serializedRecordSize > 0)
+
+    insertRecord(
+      serBuffer.getBuf,
+      Platform.BYTE_ARRAY_OFFSET,
+      serializedRecordSize,
+      partitionId)
+  }
+
   /**
    * Write a record to the shuffle sorter.
    */
-  def insertRecord(recordBase: Object,
+  private def insertRecord(recordBase: Object,
       recordOffset: Long,
       length: Int,
       partitionId: Int): Unit = {
@@ -350,10 +340,33 @@ private[spark] class SplashUnsafeSorter(
   def closeAndGetSpills(): Array[ShuffleSpillInfo] = {
     if (inMemSorter != null) {
       writeSortedFile(true)
-      freeMemory()
-      inMemSorter.free()
-      inMemSorter = null
+      freeInMemorySorter()
     }
     spills.toArray
+  }
+
+  /**
+   * Force all memory and spill files to be deleted;
+   * called by shuffle error-handling code.
+   */
+  def cleanupResources(): Unit = {
+    freeInMemorySorter()
+    spills.foreach(_.file.delete())
+  }
+
+  private def freeInMemorySorter(): Unit = {
+    freeMemory()
+    if (inMemSorter != null) {
+      inMemSorter.free()
+      inMemSorter = null
+      serBuffer = null
+      serOutputStream = null
+    }
+  }
+
+  private case class BufferedByteArrayOutputStream(
+      bufSize: Int = conf.get(SplashOpts.unsafeSerializeBufferSize))
+      extends ByteArrayOutputStream(bufSize) {
+    def getBuf: Array[Byte] = buf
   }
 }

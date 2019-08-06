@@ -92,6 +92,14 @@ object SplashOpts {
           .createWithDefault(4096)
     })
 
+  lazy val unsafeSerializeBufferSize: ConfigEntry[Int] =
+    createIfNotExists("spark.shuffle.unsafe.serializeBufferSize", builder => {
+      builder
+          .doc("The size of the buffer used for record serialization in the unsafe code path.")
+          .intConf
+          .createWithDefault(1024 * 1024)
+    })
+
   lazy val memoryMapThreshold: ConfigEntry[Long] =
     createIfNotExists("spark.storage.memoryMapThreshold", builder => {
       builder.bytesConf(ByteUnit.BYTE).createWithDefaultString("2m")
@@ -112,6 +120,20 @@ object SplashOpts {
       builder.doc("Use bypass merge sort shuffle writer if partition is lower than this")
           .intConf
           .createWithDefault(200)
+    })
+
+  lazy val maxExeMemory: ConfigEntry[Int] =
+    createIfNotExists("spark.shuffle.splash.test.maxExeMemory", builder => {
+      builder.doc("Max execution memory for test memory manager")
+          .intConf
+          .createWithDefault(200 * 1024 * 1024)
+    })
+
+  lazy val maxStorageMemory: ConfigEntry[Int] =
+    createIfNotExists("spark.shuffle.splash.test.maxStorageMemory", builder => {
+      builder.doc("Max storage memory for test memory manager")
+          .intConf
+          .createWithDefault(100 * 1024 * 1024)
     })
 
   private def createIfNotExists[T](
