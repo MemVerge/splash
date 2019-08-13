@@ -20,6 +20,7 @@
  */
 package org.apache.spark.shuffle
 
+import java.io.{InputStream, OutputStream}
 import java.util.Comparator
 
 import org.apache.spark.internal.Logging
@@ -65,6 +66,21 @@ object SplashUtils extends Logging {
    */
   def hash[T](obj: T): Int = {
     if (obj == null) 0 else obj.hashCode()
+  }
+
+  def copy(input: InputStream, output: OutputStream, buffer: Array[Byte]): Int = {
+    var count = 0L
+    var n = input.read(buffer)
+    val endOfFile = -1
+    while (endOfFile != n) {
+      output.write(buffer, 0, n)
+      count += n
+      n = input.read(buffer)
+    }
+    if (count > Integer.MAX_VALUE) {
+      return -1
+    }
+    count.intValue
   }
 }
 

@@ -17,7 +17,8 @@ package org.apache.spark.shuffle
 
 import com.memverge.splash.{StorageFactoryHolder, TmpShuffleFile}
 import org.apache.spark.storage.ShuffleDataBlockId
-import org.assertj.core.api.Assertions.assertThat
+import org.assertj.core.api.Assertions.{assertThat, assertThatExceptionOfType}
+import org.assertj.core.api.ThrowableAssert.ThrowingCallable
 import org.testng.annotations.{AfterClass, AfterMethod, Test}
 
 @Test(groups = Array("UnitTest", "IntegrationTest"))
@@ -25,11 +26,12 @@ class SplashObjectWriterTest {
   private var tmpFile: TmpShuffleFile = _
   private var objWriter: SplashObjectWriter = _
   private val blockId = ShuffleDataBlockId(1, 2, 3)
-  private val storageFactory = StorageFactoryHolder.getFactory
+  private val factory = StorageFactoryHolder.getFactory
 
   @AfterClass
   def afterClass(): Unit = {
-    StorageFactoryHolder.getFactory.reset()
+    factory.reset()
+    assertThat(factory.getTmpFileCount).isEqualTo(0)
   }
 
   @AfterMethod
@@ -40,9 +42,32 @@ class SplashObjectWriterTest {
   }
 
   def testCommitWithoutInitialize(): Unit = {
-    tmpFile = storageFactory.makeSpillFile()
+    tmpFile = factory.makeSpillFile()
     objWriter = new SplashObjectWriter(blockId, tmpFile)
 
     assertThat(objWriter.commitAndGet()) isEqualTo 0
+  }
+
+  def testWriteIntNotSupported(): Unit = {
+    tmpFile = factory.makeSpillFile()
+    objWriter = new SplashObjectWriter(blockId, tmpFile)
+
+    assertThatExceptionOfType(classOf[UnsupportedOperationException])
+        .isThrownBy(new ThrowingCallable {
+          override def call(): Unit = objWriter.write(66)
+        })
+  }
+
+  def testWriteByteArray(): Unit = {
+    tmpFile = factory.makeSpillFile()
+    objWriter = new SplashObjectWriter(blockId, tmpFile)
+    val animal = "A chimpanzee"
+    objWriter.write(animal.getBytes(), 0, animal.length)
+    assertThat(objWriter.closeAndGet()) isEqualTo animal.length
+    objWriter.flush()
+
+    val buffer = new Array[Byte](animal.length)
+    SplashUtils.withResources(tmpFile.makeBufferedInputStream())(_.read(buffer))
+    assertThat(new String(buffer)).isEqualTo(animal)
   }
 }

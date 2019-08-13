@@ -15,7 +15,6 @@
  */
 package com.memverge.splash;
 
-import java.io.BufferedOutputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
 import java.io.OutputStream;
@@ -42,14 +41,25 @@ public interface TmpShuffleFile extends ShuffleFile {
 
   OutputStream makeOutputStream();
 
-  default BufferedOutputStream makeBufferedOutputStream() {
-    return new BufferedOutputStream(
-        makeOutputStream(),
-        StorageFactoryHolder.getBufferSize());
+  default int getBufferSize() {
+    return StorageFactoryHolder.getBufferSize();
+  }
+
+  default SplashBufferedOutputStream makeBufferedOutputStream() {
+    return makeBufferedOutputStream(getBufferSize());
+  }
+
+  default SplashBufferedOutputStream makeBufferedOutputStream(int bufferSize) {
+    return new SplashBufferedOutputStream(makeOutputStream(), bufferSize);
   }
 
   default DataOutputStream makeBufferedDataOutputStream() {
     return new DataOutputStream(makeBufferedOutputStream());
+  }
+
+  default ManualCloseOutputStream makeManualCloseOutputStream(
+      ShuffleWriteMetrics metrics) {
+    return new ManualCloseOutputStream(makeOutputStream(), metrics);
   }
 
   default ManualCloseOutputStream makeBufferedManualCloseOutputStream(

@@ -59,13 +59,15 @@ class SplashUnsafeShuffleWriterTest {
   }
 
   private def createWriter(
-      serializerManager: SerializerManager = SparkEnv.get.serializerManager) = {
+      serializerManager: SerializerManager = SparkEnv.get.serializerManager,
+      conf: SparkConf = sc.conf,
+      reducer: Int = reducerNum) = {
     val rdd = sc.parallelize(0 until 1000).map { i => (i / 2, i) }
-        .partitionBy(new HashPartitioner(reducerNum))
-    serializer = new KryoSerializer(sc.conf)
+        .partitionBy(new HashPartitioner(reducer))
+    serializer = new KryoSerializer(conf)
     val dep = new ShuffleDependency[Int, Int, Int](rdd, rdd.partitioner.get)
     val handle = dep.shuffleHandle.asInstanceOf[SplashSerializedShuffleHandle[Int, Int]]
-    taskContext = TestUtil.newTaskContext(sc.conf)
+    taskContext = TestUtil.newTaskContext(conf)
     shuffleId = handle.shuffleId
     new SplashUnsafeShuffleWriter[Int, Int](
       resolver, handle, mapId, taskContext,
@@ -81,6 +83,7 @@ class SplashUnsafeShuffleWriterTest {
         .set(config.IO_ENCRYPTION_ENABLED, false)
         .set(SplashOpts.forceSpillElements, Int.MaxValue)
         .set(SplashOpts.shuffleFileBufferKB, 4096L)
+        .set(SplashOpts.fastMergeEnabled, true)
   }
 
   @AfterMethod
@@ -283,6 +286,11 @@ class SplashUnsafeShuffleWriterTest {
   def testMergeSpillsWithEncryptionAndNoCompression(): Unit =
     testMergingSpills(null: String, encrypt = true)
 
+  def testMergeSpillsWithLZ4AndEncryptionAndNoFastMerge(): Unit = {
+    sc.conf.set(SplashOpts.fastMergeEnabled, false)
+    testMergingSpills(classOf[LZ4CompressionCodec].getName, encrypt = true)
+  }
+
   def testWriteEnoughDataToTriggerSpill(): Unit = {
     val size = 100
     sc.conf.set(SplashOpts.forceSpillElements, size / 2)
@@ -322,4 +330,64 @@ class SplashUnsafeShuffleWriterTest {
     writer.stop(false)
     assertThat(storageFactory.getTmpFileCount) isEqualTo 0
   }
+
+  def testSorterAcquireMemoryTriggersSpill(): Unit = {
+    val maxExeMemory = (1 << 20) + (1 << 15) + 1
+    val conf = sc.conf.set(SplashOpts.maxExeMemory, maxExeMemory)
+    val writer = createWriter(conf = conf)
+    val size = 4000
+    (0 until size).foreach(i =>
+      writer.insertRecordIntoSorter((i, i + 1)))
+    assertThat(writer.getSpilled).isEqualTo(1)
+  }
+
+  @Test(enabled = false)
+  def testWriteRecordPerformance(): Unit = {
+    val writer = createWriter()
+    val size = 1000000
+    TestUtil.time((0 until size).foreach(i =>
+      writer.insertRecordIntoSorter((i, i + 1))))(5)
+  }
+
+  @Test(enabled = false)
+  def testWritePerformance(): Unit = {
+    val size = 20000000
+    TestUtil.time({
+      val writer = createWriter()
+      writer.write(PGen(size))
+    })(5)
+  }
+
+  @Test(enabled = false)
+  def testMergeSpillPerformance(): Unit = {
+    val size = 4000000
+    val duplicates = 200
+    val partitions = 200
+
+    val writer = createWriter(reducer = partitions)
+    (0 until duplicates).foreach(_ => {
+      writer.writeRecords(PGen(size))
+      writer.forceSorterToSpill()
+    })
+
+    val start = System.nanoTime()
+    writer.closeAndWriteOutput()
+    val millis = (System.nanoTime() - start) / 1000 / 1000
+    val total = writer.getPartitionLengths.sum >> 20
+    println(s"[testMergeSpillPerformance] " +
+        s"merge $duplicates spills of $total MB took: $millis ms")
+  }
+
+  case class PGen(total: Int) extends Iterator[Product2[Int, Int]] {
+    private var current: Int = 0
+
+    override def hasNext: Boolean = current < total
+
+    override def next(): Product2[Int, Int] = {
+      val v = current
+      current += 1
+      (v, v / 2)
+    }
+  }
+
 }

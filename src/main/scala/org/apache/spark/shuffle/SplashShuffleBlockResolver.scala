@@ -26,7 +26,6 @@ import java.security.MessageDigest
 
 import com.google.common.annotations.VisibleForTesting
 import com.memverge.splash.{ShuffleFile, StorageFactory, StorageFactoryHolder, TmpShuffleFile}
-import org.apache.commons.io.IOUtils
 import org.apache.commons.lang3.StringUtils
 import org.apache.spark.SparkEnv
 import org.apache.spark.internal.Logging
@@ -196,7 +195,8 @@ class SplashShuffleBlockResolver(appId: String)
       getBlockData(blockId) match {
         case Some(BlockDataStreamInfo(is, _)) =>
           try {
-            IOUtils.copy(is, os)
+            val buffer = new Array[Byte](storageFactory.getFileBufferSize)
+            SplashUtils.copy(is, os, buffer)
             logInfo(s"dump $blockId to $dumpFilePath success.")
           } finally {
             is.close()

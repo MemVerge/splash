@@ -37,7 +37,7 @@
   </appender>
 
   <root level="DEBUG">
-    <appender-ref ref="SPLASH_TEST_LOG" />
-    <appender-ref ref="STDOUT" />
+    <appender-ref ref="SPLASH_TEST_LOG"/>
+    <appender-ref ref="STDOUT"/>
   </root>
 </configuration>
