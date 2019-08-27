@@ -296,19 +296,23 @@ object ShufflePerfTool {
     }
   }
 
-  private def toSizeStr(scale: Long)(size: Long): String = {
+  private def toSizeStr(scale: Long)(size: Long): String =
+    toSizeStrDouble(scale)(size.doubleValue())
+
+  private[splash] def toSizeStrDouble(scale: Long)(size: Double): String = {
     val kbScale: Long = scale
     val mbScale: Long = scale * kbScale
     val gbScale: Long = scale * mbScale
     val tbScale: Long = scale * gbScale
+    val dSize = size.doubleValue()
     if (size > tbScale) {
-      size / tbScale + "T"
+      "%.2fT".format(dSize / tbScale)
     } else if (size > gbScale) {
-      size / gbScale + "G"
+      "%.2fG".format(dSize / gbScale)
     } else if (size > mbScale) {
-      size / mbScale + "M"
+      "%.2fM".format(dSize / mbScale)
     } else if (size > kbScale) {
-      size / kbScale + "K"
+      "%.2fK".format(dSize / kbScale)
     } else {
       size + ""
     }

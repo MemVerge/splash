@@ -8,7 +8,7 @@ import org.testng.annotations.{AfterMethod, BeforeMethod, Test}
 @Test(groups = Array("UnitTest", "IntegrationTest"))
 class ShufflePerfToolTest {
   @BeforeMethod
-  private def beforeMethod(): Unit = afterMethod
+  private def beforeMethod(): Unit = afterMethod()
 
   @AfterMethod
   private def afterMethod(): Unit = StorageFactoryHolder.getFactory.reset()
@@ -34,5 +34,14 @@ class ShufflePerfToolTest {
     val ret = ShufflePerfTool.parse(Array("-b", "block"))
     assertThat(ret.isLeft).isTrue
     ret.left.map(msg => assertThat(msg).contains("invalid integer"))
+  }
+
+  def testToSizeStr(): Unit = {
+    val scale = ShufflePerfTool.toSizeStrDouble(1000L)(_)
+    assertThat(scale(987)).isEqualTo("987.0")
+    assertThat(scale(512 * 1e3)).isEqualTo("512.00K")
+    assertThat(scale(1010 * 1e3)).isEqualTo("1.01M")
+    assertThat(scale(1237 * 1e6)).isEqualTo("1.24G")
+    assertThat(scale(5678 * 1e9)).isEqualTo("5.68T")
   }
 }
