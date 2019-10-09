@@ -15,11 +15,21 @@
  */
 package com.memverge.splash;
 
+import com.google.common.io.Closeables;
 import java.io.DataOutputStream;
 import java.io.IOException;
+import java.io.InputStream;
 import java.io.OutputStream;
+import java.util.Arrays;
 import java.util.UUID;
+import lombok.val;
+import org.apache.commons.io.output.CountingOutputStream;
+import org.apache.commons.lang3.NotImplementedException;
 import org.apache.spark.executor.ShuffleWriteMetrics;
+import org.apache.spark.network.util.LimitedInputStream;
+import org.apache.spark.shuffle.CloseAndFlushShieldOutputStream;
+import org.apache.spark.shuffle.ShuffleSpillInfo;
+import org.apache.spark.shuffle.SplashUtils;
 
 public interface TmpShuffleFile extends ShuffleFile {
 
@@ -69,5 +79,13 @@ public interface TmpShuffleFile extends ShuffleFile {
 
   default ManualCloseOutputStream makeBufferedManualCloseOutputStream() {
     return makeBufferedManualCloseOutputStream(null);
+  }
+
+  default boolean supportFastMerge() {
+    return false;
+  }
+
+  default long[] fastMerge(ShuffleSpillInfo[] spills) throws IOException {
+    throw new NotImplementedException("do not support fast merge");
   }
 }

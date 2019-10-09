@@ -146,11 +146,9 @@ private[spark] class SplashUnsafeShuffleWriter[K, V](
   private[spark] def forceSorterToSpill(): Unit = sorter.spill()
 
   def mergeSpills(spills: Array[ShuffleSpillInfo], dataTmp: TmpShuffleFile): Array[Long] = {
-    val compressionEnabled = conf.get(SplashOpts.shuffleCompress)
     val compressionCodec = CompressionCodec.createCodec(conf)
     val fastMergeEnabled = conf.get(SplashOpts.fastMergeEnabled)
-    val fastMergeSupported = !compressionEnabled ||
-        CompressionCodec.supportsConcatenationOfSerializedStreams(compressionCodec)
+    val fastMergeSupported = serializer.isFastMergeSupported && dataTmp.supportFastMerge
 
     logInfo(s"merge ${spills.length} with ${partitioner.numPartitions} partitions.")
     try {
@@ -166,11 +164,16 @@ private[spark] class SplashUnsafeShuffleWriter[K, V](
         spills(0).partitionLengths
       } else {
         val partitionLengths = if (fastMergeEnabled && fastMergeSupported) {
-          logDebug("Using fileStream-based fast merge")
-          mergeSpillsWithStream(spills, dataTmp, None)
+          logDebug("Using fast merge")
+          dataTmp.fastMerge(spills)
         } else {
           logDebug("Using slow merge")
-          mergeSpillsWithStream(spills, dataTmp, Some(compressionCodec))
+          val compressionCodecOpt = if (serializer.isCompressEnabled) {
+            Some(compressionCodec)
+          } else {
+            None
+          }
+          mergeSpillsWithStream(spills, dataTmp, compressionCodecOpt)
         }
         writeMetrics.decBytesWritten(spills(spills.length - 1).spillSize)
         writeMetrics.incBytesWritten(partitionLengths.sum)
