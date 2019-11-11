@@ -132,12 +132,32 @@ class SplashSerializer(
     }
   }
 
-  private def isCompressEnabled = {
+  def isCompressEnabled = {
     if (sparkEnv != null) {
       sparkEnv.conf.get(SplashOpts.shuffleCompress)
     } else {
       false
     }
+  }
+
+  private def isEncryptionEnabled = {
+    serializerManagerOpt match {
+      case Some(serializerManager) =>
+        serializerManager.encryptionEnabled
+      case None =>
+        false
+    }
+  }
+
+  def isFastMergeSupported: Boolean = {
+    val compressionAllowFastMerge =
+      getCompressCodec match {
+        case Some(codec) =>
+          CompressionCodec.supportsConcatenationOfSerializedStreams(codec)
+        case None =>
+          true
+      }
+    !isEncryptionEnabled && compressionAllowFastMerge
   }
 
   private def getCompressCodec = {
